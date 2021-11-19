@@ -1,0 +1,11 @@
+每个应用使用独立的automake管理，整个matrix使用sh脚本管理，管理方式模仿android系统。
+每个应用可以到各自目录进行编译，也可以在根目录统一编译（此种方式编译，会使用envsetup.sh中所选择的工具链）
+
+compile:
+
+1.source build/ensetup.sh
+2.make
+3.make subtarget
+4.make clean
+5.make dist
+

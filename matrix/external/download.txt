@@ -1,0 +1,4 @@
+https://curl.se/download/curl-7.80.0.tar.gz
+https://www.openssl.org/source/old/1.1.1/openssl-1.1.1k.tar.gz
+https://sourceware.org/ftp/valgrind/valgrind-3.15.0.tar.bz2
+https://jaist.dl.sourceforge.net/project/iperf2/iperf-2.1.4.tar.gz
