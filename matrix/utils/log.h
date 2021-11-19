@@ -21,9 +21,7 @@
 #define	LOG_INFO			6	/* Informational message */
 #define	LOG_DEBUG			7	/* Debug-level message */
 
-// #define CONFIG_LOG_LEVEL		LOG_WARNING
-// #define CONFIG_APP_NAME		"test"
-// #define CONFIG_LOG_SUPPORT_COLOR
+#define CONFIG_LOG_SUPPORT_COLOR
 
 #ifdef	CONFIG_LOG_SUPPORT_COLOR
 #define	LOG_C_DEFAULT			"\x1B[0m"
@@ -58,14 +56,14 @@
 #define log_level_printf(level, fmt, arg...)\
 	do {\
 		if (level <= CONFIG_LOG_LEVEL) {\
-			printf("[%s:%d]:" fmt, __FUNCTION__, __LINE__, ##arg);\
+			printf(fmt, ##arg);\
 		}\
 	} while(0)
  
-#define	LOGE(fmt, ...)	log_level_printf(LOG_ERR, LOG_C_RED "[%s][%s][%s][E]" fmt LOG_C_DEFAULT, time_date(), application_name(), thread_name(), ##__VA_ARGS__)
-#define	LOGW(fmt, ...)	log_level_printf(LOG_WARNING, LOG_C_YELLOW "[%s][%s][%s][W]" fmt LOG_C_DEFAULT, time_date(), application_name(), thread_name(), ##__VA_ARGS__)
-#define	LOGI(fmt, ...)	log_level_printf(LOG_INFO, LOG_C_DEFAULT "[%s][%s][%s][I]" fmt LOG_C_DEFAULT, time_date(), application_name(), thread_name(), ##__VA_ARGS__)
-#define	LOGD(fmt, ...)	log_level_printf(LOG_DEBUG, LOG_C_DEFAULT "[%s][%s][%s][D]" fmt LOG_C_DEFAULT, time_date(), application_name(), thread_name(), ##__VA_ARGS__)
+#define	LOGE(fmt, ...)	log_level_printf(LOG_ERR, LOG_C_RED "[%s][%s][%s][E][%s][%d]" fmt "\n" LOG_C_DEFAULT, time_date(), application_name(), thread_name(), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define	LOGW(fmt, ...)	log_level_printf(LOG_WARNING, LOG_C_YELLOW "[%s][%s][%s][W][%s][%d]" fmt "\n" LOG_C_DEFAULT, time_date(), application_name(), thread_name(),__FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define	LOGI(fmt, ...)	log_level_printf(LOG_INFO, LOG_C_DEFAULT "[%s][%s][%s][I][%s][%d]" fmt "\n" LOG_C_DEFAULT, time_date(), application_name(), thread_name(), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define	LOGD(fmt, ...)	log_level_printf(LOG_DEBUG, LOG_C_DEFAULT "[%s][%s][%s][D][%s][%d]" fmt "\n" LOG_C_DEFAULT, time_date(), application_name(), thread_name(), __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 #define LOG_HEXDUMP_DBG(_data, _length, _str)                                  \
 do {                                                                           \
