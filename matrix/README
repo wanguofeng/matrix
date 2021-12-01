@@ -3,7 +3,7 @@
 
 compile:
 
-1.source build/ensetup.sh
+1.source build/$target/envsetup.sh
 2.make
 3.make subtarget
 4.make clean
