@@ -1,3 +1,4 @@
+#define CONFIG_LOG_TAG	"demo"
 #include <stdio.h>
 #include <log.h>
 #include <os_info.h>

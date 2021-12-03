@@ -4,7 +4,6 @@
 #include <sys/time.h>
 #include <time.h>
 #include <sys/prctl.h>
-#include <log.h>
 #include <os_info.h>
 #include <stdint.h>
 
@@ -25,10 +24,6 @@ char* time_date(void)
 
 char* thread_name(void) {
 	return "none";
-}
-
-char* application_name(void) {
-	return CONFIG_APP_NAME;
 }
 
 #if 0

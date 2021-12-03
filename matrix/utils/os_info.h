@@ -4,8 +4,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
-char* time_date(void);
-char* thread_name(void);
-char* application_name(void);
+extern char* time_date(void);
+extern char* thread_name(void);
 
 #endif

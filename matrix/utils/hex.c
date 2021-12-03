@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <ctype.h>
 #include <hex.h>
+
 uint8_t u8_to_dec(char *buf, uint8_t buflen, uint8_t value)
 {
         uint8_t divisor = 100;

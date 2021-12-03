@@ -45,6 +45,10 @@
 #define	LOG_C_WHITE
 #endif
 
+#ifndef CONFIG_LOG_TAG
+	#define CONFIG_LOG_TAG		"matrix"
+#endif
+
 #ifndef CONFIG_LOG_LEVEL
 	#define CONFIG_LOG_LEVEL	LOG_DEBUG
 #endif
@@ -60,10 +64,10 @@
 		}\
 	} while(0)
  
-#define	LOGE(fmt, ...)	log_level_printf(LOG_ERR, LOG_C_RED "[%s][%s][%s][E][%s][%d]" fmt "\n" LOG_C_DEFAULT, time_date(), application_name(), thread_name(), __FUNCTION__, __LINE__, ##__VA_ARGS__)
-#define	LOGW(fmt, ...)	log_level_printf(LOG_WARNING, LOG_C_YELLOW "[%s][%s][%s][W][%s][%d]" fmt "\n" LOG_C_DEFAULT, time_date(), application_name(), thread_name(),__FUNCTION__, __LINE__, ##__VA_ARGS__)
-#define	LOGI(fmt, ...)	log_level_printf(LOG_INFO, LOG_C_DEFAULT "[%s][%s][%s][I][%s][%d]" fmt "\n" LOG_C_DEFAULT, time_date(), application_name(), thread_name(), __FUNCTION__, __LINE__, ##__VA_ARGS__)
-#define	LOGD(fmt, ...)	log_level_printf(LOG_DEBUG, LOG_C_DEFAULT "[%s][%s][%s][D][%s][%d]" fmt "\n" LOG_C_DEFAULT, time_date(), application_name(), thread_name(), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define	LOGE(fmt, ...)	log_level_printf(LOG_ERR, LOG_C_RED "[%s][%s][%s][E][%s][%d]" fmt "\n" LOG_C_DEFAULT, time_date(), CONFIG_LOG_TAG, thread_name(), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define	LOGW(fmt, ...)	log_level_printf(LOG_WARNING, LOG_C_YELLOW "[%s][%s][%s][W][%s][%d]" fmt "\n" LOG_C_DEFAULT, time_date(), CONFIG_LOG_TAG, thread_name(),__FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define	LOGI(fmt, ...)	log_level_printf(LOG_INFO, LOG_C_DEFAULT "[%s][%s][%s][I][%s][%d]" fmt "\n" LOG_C_DEFAULT, time_date(), CONFIG_LOG_TAG, thread_name(), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define	LOGD(fmt, ...)	log_level_printf(LOG_DEBUG, LOG_C_DEFAULT "[%s][%s][%s][D][%s][%d]" fmt "\n" LOG_C_DEFAULT, time_date(), CONFIG_LOG_TAG, thread_name(), __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 #define LOG_HEXDUMP_DBG(_data, _length, _str)                                  \
 do {                                                                           \
