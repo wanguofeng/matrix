@@ -1,0 +1,7 @@
+/home/wanguofeng/Workspace/myself/matrix/matrix/external/unqlite/CMakeFiles/install/strip.dir
+/home/wanguofeng/Workspace/myself/matrix/matrix/external/unqlite/CMakeFiles/edit_cache.dir
+/home/wanguofeng/Workspace/myself/matrix/matrix/external/unqlite/CMakeFiles/rebuild_cache.dir
+/home/wanguofeng/Workspace/myself/matrix/matrix/external/unqlite/CMakeFiles/unqlite.dir
+/home/wanguofeng/Workspace/myself/matrix/matrix/external/unqlite/CMakeFiles/list_install_components.dir
+/home/wanguofeng/Workspace/myself/matrix/matrix/external/unqlite/CMakeFiles/install/local.dir
+/home/wanguofeng/Workspace/myself/matrix/matrix/external/unqlite/CMakeFiles/install.dir
