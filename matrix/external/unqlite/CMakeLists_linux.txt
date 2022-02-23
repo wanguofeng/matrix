@@ -2,9 +2,6 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.0.0)
 PROJECT(unqlite)
 INCLUDE(GNUInstallDirs)
 
-SET(CMAKE_C_COMPILER /home/wanguofeng/Workspace/miio_bt_platform2/miio_bt_builder/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/bin/arm-linux-gnueabihf-gcc)
-SET(CMAKE_CXX_COMPILER /home/wanguofeng/Workspace/miio_bt_platform2/miio_bt_builder/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/bin/arm-linux-gnueabihf-g++)
-
 # If the user did not customize the install prefix,
 # set it to live under build so we don't inadvertently pollute /usr/local
 IF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)

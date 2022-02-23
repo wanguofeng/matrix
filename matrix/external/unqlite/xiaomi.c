@@ -41,6 +41,8 @@
 #include <stdlib.h> /* exit() */
 /* Make sure this header file is available.*/
 #include "unqlite.h"
+#include <string.h>
+#include <errno.h>
 /*
  * Banner.
  */
@@ -50,33 +52,56 @@ static const char zBanner[] = {
 	"                                         http://unqlite.org/\n"
 	"============================================================\n"
 };
-/*
- * Extract the database error log and exit.
- */
-static void Fatal(unqlite *pDb,const char *zMsg)
-{
-	if( pDb ){
-		const char *zErr;
-		int iLen = 0; /* Stupid cc warning */
 
-		/* Extract the database error log */
-		unqlite_config(pDb,UNQLITE_CONFIG_ERR_LOG,&zErr,&iLen);
-		if( iLen > 0 ){
-			/* Output the DB error log */
-			puts(zErr); /* Always null terminated */
+#define CONFIG_SETTINGS_UNQLITE_KV_SIZE 128
+
+/* Forward declaration: Data consumer callback */
+static int data_consumer_callback(const void *pData,unsigned int nDatalen,void *pUserData /* Unused */);
+static void Fatal(unqlite *pDb,const char *zMsg);
+
+static char unqlite_load_data[CONFIG_SETTINGS_UNQLITE_KV_SIZE];
+static short unqlite_load_data_len = 0;
+
+int hex2char(unsigned char x, char *c)
+{
+	if (x <= 9) {
+		*c = x + '0';
+	} else  if (x <= 15) {
+		*c = x - 10 + 'A';
+	} else {
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+int bin2hex(const unsigned char *buf, int buflen, char *hex, int hexlen)
+{
+	if ((hexlen + 1) < buflen * 2) {
+		return 0;
+	}
+
+	for (size_t i = 0; i < buflen; i++) {
+		if (hex2char(buf[i] >> 4, &hex[2 * i]) < 0) {
+			return 0;
 		}
-	}else{
-		if( zMsg ){
-			puts(zMsg);
+		if (hex2char(buf[i] & 0xf, &hex[2 * i + 1]) < 0) {
+			return 0;
 		}
 	}
-	/* Manually shutdown the library */
-	unqlite_lib_shutdown();
-	/* Exit immediately */
-	exit(0);
+
+	hex[2 * buflen] = '\0';
+	return 2 * buflen;
 }
-/* Forward declaration: Data consumer callback */
-static int DataConsumerCallback(const void *pData,unsigned int nDatalen,void *pUserData /* Unused */);
+
+#define HEXDUMP(_data, _length, _str)                                  \
+do {                                                                           \
+        char str[(_length)*2 + 1];                                                     \
+        bin2hex((void *)(_data), _length, str, (_length)*2);                       \
+        str[(_length)*2] = '\0';                                                                                \
+        printf("%s: %s\n", _str, str);                                             \
+} while(0)
+
 
 int main(int argc,char *argv[])
 {
@@ -92,65 +117,7 @@ int main(int argc,char *argv[])
 		Fatal(0,"Out of memory");
 	}
 	
-#if 0
-	/* Store some records */
-	rc = unqlite_kv_store(pDb,"test",-1,"Hello World",11); /* test => 'Hello World' */
-	if( rc != UNQLITE_OK ){
-		/* Insertion fail, extract database error log and exit */
-		Fatal(pDb,0);
-	}
-	/* A small formatted string */
-	rc = unqlite_kv_store_fmt(pDb,"date",-1,"dummy date: %d:%d:%d",2013,06,07); /* Dummy date */
-	if( rc != UNQLITE_OK ){
-		/* Insertion fail, extract database error log and exit */
-		Fatal(pDb,0);
-	}
-	
-	/* Switch to the append interface */
-	rc = unqlite_kv_append(pDb,"msg",-1,"Hello, ",7); //msg => 'Hello, '
-	if( rc == UNQLITE_OK ){
-		/* The second chunk */
-		rc = unqlite_kv_append(pDb,"msg",-1,"dummy time is: ",17); /* msg => 'Hello, Current time is: '*/
-		if( rc == UNQLITE_OK ){
-			/* The last formatted chunk */
-			rc = unqlite_kv_append_fmt(pDb,"msg",-1,"%d:%d:%d",10,16,53); /* msg => 'Hello, Current time is: 10:16:53' */
-		}
-	}
-	/* Store 20 random records.*/
-	for(i = 0 ; i < 20 ; ++i ){
-		char zKey[12]; /* Random generated key */
-		char zData[34]; /* Dummy data */
-		
-		/* Generate the random key */
-		unqlite_util_random_string(pDb,zKey,sizeof(zKey));
-		
-		/* Perform the insertion */
-		rc = unqlite_kv_store(pDb,zKey,sizeof(zKey),zData,sizeof(zData));
-		if( rc != UNQLITE_OK ){
-			break;
-		}
-	}
-	if( rc != UNQLITE_OK ){
-		/* Insertion fail, rollback the transaction  */
-		rc = unqlite_rollback(pDb);
-		if( rc != UNQLITE_OK ){
-			/* Extract database error log and exit */
-			Fatal(pDb,0);
-		}
-	}
-
-	/* Delete a record */
-	unqlite_kv_delete(pDb,"test",-1);
-
-        /* Store some records */
-        rc = unqlite_kv_store(pDb,"test",-1,"Hello World",11); /* test => 'Hello World' */
-        if( rc != UNQLITE_OK ){
-                /* Insertion fail, extract database error log and exit */
-                Fatal(pDb,0);
-        }
-
 	puts("Done...Starting the iteration process");
-#endif
 	/* Allocate a new cursor instance */
 	rc = unqlite_kv_cursor_init(pDb,&pCur);
 	if( rc != UNQLITE_OK ){
@@ -159,7 +126,6 @@ int main(int argc,char *argv[])
 	/* Point to the first record */
 	unqlite_kv_cursor_first_entry(pCur);
 	
-		
 	/* Iterate over the entries */
 	while( unqlite_kv_cursor_valid_entry(pCur) ){
 		int nKeyLen;
@@ -167,14 +133,15 @@ int main(int argc,char *argv[])
 		
 		/* Consume the key */
 		unqlite_kv_cursor_key(pCur,0,&nKeyLen); /* Extract key length */
-		printf("\nKey ==> %u\n\t",nKeyLen);
-		unqlite_kv_cursor_key_callback(pCur,DataConsumerCallback,0);
-			
+		unqlite_kv_cursor_key_callback(pCur,data_consumer_callback,0);
+		printf("key value => %s, len = %d\n", unqlite_load_data, unqlite_load_data_len);	
 		/* Consume the data */
 		
 		unqlite_kv_cursor_data(pCur,0,&nDataLen);
-		printf("\nData ==> %lld\n\t",nDataLen);
-		unqlite_kv_cursor_data_callback(pCur,DataConsumerCallback,0);
+		unqlite_kv_cursor_data_callback(pCur,data_consumer_callback,0);
+		printf("Data value len ==> %lld ",nDataLen);
+		HEXDUMP(unqlite_load_data, unqlite_load_data_len,"Data value ");
+		printf("\n\n");
 		/*
 		*/
 
@@ -212,24 +179,43 @@ int main(int argc,char *argv[])
  * disk file, connected peer and so forth.
  * Depending on how large the extracted data, the callback may be invoked more than once.
  */
-static int DataConsumerCallback(const void *pData,unsigned int nDatalen,void *pUserData /* Unused */)
+
+/*
+ * Extract the database error log and exit.
+ */
+static void Fatal(unqlite *pDb,const char *zMsg)
 {
-#ifdef __WINNT__
-	BOOL rc;
-	rc = WriteFile(GetStdHandle(STD_OUTPUT_HANDLE),pData,(DWORD)nDatalen,0,0);
-	if( !rc ){
-		/* Abort processing */
-		return UNQLITE_ABORT;
-	}
-#else
-	ssize_t nWr;
-	nWr = write(STDOUT_FILENO,pData,nDatalen);
-	if( nWr < 0 ){
-		/* Abort processing */
-		return UNQLITE_ABORT;
-	}
-#endif /* __WINT__ */
-	
-	/* All done, data was redirected to STDOUT */
-	return UNQLITE_OK;
+        if ( pDb ) {
+                        const char *zErr;
+                        int iLen = 0; /* Stupid cc warning */
+
+                        /* Extract the database error log */
+                        unqlite_config(pDb,UNQLITE_CONFIG_ERR_LOG,&zErr,&iLen);
+                        if( iLen > 0 ){
+                                        /* Output the DB error log */
+                                        printf("%s\n", zErr); /* Always null terminated */
+                        }
+        } else {
+                        if( zMsg ){
+                                        printf("%s\n", zMsg);
+                        }
+        }
+        /* Manually shutdown the library */
+        unqlite_lib_shutdown();
+}
+
+static int data_consumer_callback(const void *pData,unsigned int nDatalen,void *pUserData /* Unused */)
+{
+        // printf("pData = %s, nDatalen = %d\n", pData, nDatalen);
+        memset(unqlite_load_data, 0x00, CONFIG_SETTINGS_UNQLITE_KV_SIZE);
+        if (nDatalen >= CONFIG_SETTINGS_UNQLITE_KV_SIZE)
+                nDatalen = CONFIG_SETTINGS_UNQLITE_KV_SIZE - 1;
+        memcpy(unqlite_load_data, pData, nDatalen);
+        unqlite_load_data_len = nDatalen;
+        if( nDatalen < 0 ){
+                        /* Abort processing */
+                        return UNQLITE_ABORT;
+        }
+
+        return UNQLITE_OK;
 }
