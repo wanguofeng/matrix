@@ -109,7 +109,10 @@ int main(int argc,char *argv[])
 	unqlite_kv_cursor *pCur;    /* Cursor handle */
 	int i,rc;
 
-	puts(zBanner);
+	if (argc != 2) {
+		puts(" usage: ./parse_unqlite unqlite.db \n example: ./parse_unqlite zblue_self.db");
+		return 0;
+	}
 
 	/* Open our database */
 	rc = unqlite_open(&pDb,argc > 1 ? argv[1] /* On-disk DB */ : ":mem:" /* In-mem DB */,UNQLITE_OPEN_CREATE);
@@ -117,7 +120,7 @@ int main(int argc,char *argv[])
 		Fatal(0,"Out of memory");
 	}
 	
-	puts("Done...Starting the iteration process");
+	puts("Done...Starting the iteration process\n\n");
 	/* Allocate a new cursor instance */
 	rc = unqlite_kv_cursor_init(pDb,&pCur);
 	if( rc != UNQLITE_OK ){
