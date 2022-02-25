@@ -58,19 +58,19 @@ static void *mempbrk(const void *data_, size_t len, const void *accept_, size_t 
 	int i = 0, j = 0;
 
 	for (i = len - accept_len; i >= 0; i --) {
-		
+
 		int ret = 0;
 
 		for (j = 0; j < accept_len; j ++) {
-	
+
 			if (data[i+j] != accept[j]) {
 				// printf("can't find %s\n", accept);
 				break;
 			}
 		}
-		
+
 		if (j == accept_len) {
-			
+
 			if (len - i <= accept_len + value_len) {
 				printf("this %s is invaild\n", accept);
 				break;
@@ -86,89 +86,89 @@ static void *mempbrk(const void *data_, size_t len, const void *accept_, size_t 
 
 int transfer_meshinfo_storage(uint8_t *seq, uint8_t seq_len, uint8_t *iv, uint8_t iv_len)
 {
-   FILE *fp;
-   long total_len = 0;
-   long remain_len = 0;
-   int i = 0;
-   
-   bool is_seq_finded = false;
-   bool is_iv_finded = false;
+	FILE *fp;
+	long total_len = 0;
+	long remain_len = 0;
+	int i = 0;
 
-   unsigned char data[DATA_LEN + DATA_EXTERN_LEN] = {0x00};
+	bool is_seq_finded = false;
+	bool is_iv_finded = false;
 
-   fp = fopen(SOURCE_FILE_NAME, "r");
+	unsigned char data[DATA_LEN + DATA_EXTERN_LEN] = {0x00};
 
-   if (fp == NULL) {
-       printf("fopen zblue file error.\n");
-       return -1;
-   }
+	fp = fopen(SOURCE_FILE_NAME, "r");
 
-   if (0 != fseek(fp, 0, SEEK_END)) {
-	printf("fseek zblue file error.\n");
-	fclose(fp);
-   	return -1;
-   }
-
-   total_len = ftell(fp);
-
-   printf("total len = %ld\n\n", total_len);
-
-   remain_len = total_len;
-
-   do {
-	int ret = 0;
-   	i++;
-
-	if (remain_len > DATA_LEN) {
-		ret = fseek(fp, -DATA_LEN * i, SEEK_END);
-	} else {
-		ret = fseek(fp, 0, SEEK_SET);
+	if (fp == NULL) {
+		printf("fopen zblue file error.\n");
+		return -1;
 	}
-		
-   	if (0 != ret) {
+
+	if (0 != fseek(fp, 0, SEEK_END)) {
 		printf("fseek zblue file error.\n");
 		fclose(fp);
    		return -1;
-   	}
+	}
 
-	remain_len = ftell(fp);
+	total_len = ftell(fp);
 
-	long read_len = fread(data, 1, DATA_LEN + DATA_EXTERN_LEN, fp);
-	printf("read_len = %ld\n", read_len);
-	printf("remain_len = %ld\n\n", remain_len);
-	// HEX_DUMP(data, read_len, "hex dump");
+	printf("total len = %ld\n\n", total_len);
 
-	if (!is_iv_finded) {
+	remain_len = total_len;
 
-		void *p = mempbrk(data, read_len, "IV=", strlen("IV="), iv_len);
-	
-		if (NULL != p) {
-			// HEX_DUMP(p, iv_len, "iv struct");
-			memcpy(iv, p, iv_len);
-			is_iv_finded = true;
+	do {
+		int ret = 0;
+		i++;
+
+		if (remain_len > DATA_LEN) {
+			ret = fseek(fp, -DATA_LEN * i, SEEK_END);
+		} else {
+			ret = fseek(fp, 0, SEEK_SET);
 		}
-	}
 
-	if (!is_seq_finded) {
-
-		void *p = mempbrk(data, read_len, "Seq=", strlen("Seq="), seq_len);
-	
-		if (NULL != p) {
-			// HEX_DUMP(p, seq_len, "seq number");
-			memcpy(seq, p, seq_len);
-			is_seq_finded = true;
+		if (0 != ret) {
+			printf("fseek zblue file error.\n");
+			fclose(fp);
+			return -1;
 		}
-	}
-	
-	if (is_seq_finded && is_iv_finded) {
-		break;
-	}
 
-   } while (remain_len != 0);
+		remain_len = ftell(fp);
 
-   fclose(fp);
-   
-   return 0;
+		long read_len = fread(data, 1, DATA_LEN + DATA_EXTERN_LEN, fp);
+		printf("read_len = %ld\n", read_len);
+		printf("remain_len = %ld\n\n", remain_len);
+		// HEX_DUMP(data, read_len, "hex dump");
+
+		if (!is_iv_finded) {
+
+			void *p = mempbrk(data, read_len, "IV=", strlen("IV="), iv_len);
+
+			if (NULL != p) {
+				// HEX_DUMP(p, iv_len, "iv struct");
+				memcpy(iv, p, iv_len);
+				is_iv_finded = true;
+			}
+		}
+
+		if (!is_seq_finded) {
+
+			void *p = mempbrk(data, read_len, "Seq=", strlen("Seq="), seq_len);
+		
+			if (NULL != p) {
+				// HEX_DUMP(p, seq_len, "seq number");
+				memcpy(seq, p, seq_len);
+				is_seq_finded = true;
+			}
+		}
+
+		if (is_seq_finded && is_iv_finded) {
+			break;
+		}
+
+	} while (remain_len != 0);
+
+	fclose(fp);
+
+	return 0;
 }
 
 int main() {
