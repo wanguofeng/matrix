@@ -1,1 +1,1 @@
-gcc test.c -g -o test
+gcc test.c unqlite.c -g -o test

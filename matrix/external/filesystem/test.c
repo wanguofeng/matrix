@@ -5,6 +5,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <unistd.h>
+#include <fcntl.h>
+
+#include <stdio.h>  /* puts() */
+#include <stdlib.h> /* exit() */
+#include "unqlite.h"
+
 #define DATA_LEN 1024
 #define DATA_EXTERN_LEN	32
 
@@ -43,6 +50,26 @@ size_t bin2hex(const uint8_t *buf, size_t buflen, char *hex, size_t hexlen)
         return 2 * buflen;
 }
 
+static inline uint16_t sys_get_le16(const uint8_t src[2])
+{
+	return ((uint16_t)src[1] << 8) | src[0];
+}
+
+/**
+ *  @brief Get a 24-bit integer stored in big-endian format.
+ *
+ *  Get a 24-bit integer, stored in big-endian format in a potentially
+ *  unaligned memory location, and convert it to the host endianness.
+ *
+ *  @param src Location of the big-endian 24-bit integer to get.
+ *
+ *  @return 24-bit integer in host endianness.
+ */
+static inline uint32_t sys_get_le24(const uint8_t src[3])
+{
+	return ((uint32_t)src[2] << 16) | sys_get_le16(&src[0]);
+}
+
 #define HEX_DUMP(_data, _length, _str)                                  \
 	do {								\
         char str[(_length)*2 + 1];                                      \
@@ -71,7 +98,7 @@ static void *mempbrk(const void *data_, size_t len, const void *accept_, size_t 
 
 		if (j == accept_len) {
 
-			if (len - i <= accept_len + value_len) {
+			if (len - i < accept_len + value_len) {
 				printf("this %s is invaild\n", accept);
 				break;
 			}
@@ -84,6 +111,57 @@ static void *mempbrk(const void *data_, size_t len, const void *accept_, size_t 
 	return NULL;
 }
 
+static void Fatal(unqlite *pDb,const char *zMsg)
+{
+        if ( pDb ) {
+                        const char *zErr;
+                        int iLen = 0; /* Stupid cc warning */
+
+                        /* Extract the database error log */
+                        unqlite_config(pDb,UNQLITE_CONFIG_ERR_LOG,&zErr,&iLen);
+                        if( iLen > 0 ){
+                                        /* Output the DB error log */
+                                        printf("%s\n", zErr); /* Always null terminated */
+                        }
+        } else {
+                        if( zMsg ){
+                                        printf("%s\n", zMsg);
+                        }
+        }
+        /* Manually shutdown the library */
+        unqlite_lib_shutdown();
+}
+
+int save_meshinfo2unqlite(uint8_t *seq, uint8_t seq_len, uint8_t *iv, uint8_t iv_len) {
+
+	unqlite *pDb;               /* Database handle */
+	unqlite_kv_cursor *pCur;    /* Cursor handle */
+	int i,rc;
+
+	/* Open our database */
+	rc = unqlite_open(&pDb, TARGET_FILE_NAME, UNQLITE_OPEN_CREATE);
+	if( rc != UNQLITE_OK ){
+		Fatal(0,"Out of memory");
+	}
+
+	/* Store some records */
+	rc = unqlite_kv_store(pDb, "bt/mesh/Seq", -1, seq, seq_len);
+	if( rc != UNQLITE_OK ){
+		/* Insertion fail, extract database error log and exit */
+		Fatal(pDb,0);
+	}
+
+	/* Store some records */
+	rc = unqlite_kv_store(pDb, "bt/mesh/IV", -1, iv, iv_len);
+	if( rc != UNQLITE_OK ){
+		/* Insertion fail, extract database error log and exit */
+		Fatal(pDb,0);
+	}
+
+	/* Auto-commit the transaction and close our database */
+	unqlite_close(pDb);
+}
+
 int transfer_meshinfo_storage(uint8_t *seq, uint8_t seq_len, uint8_t *iv, uint8_t iv_len)
 {
 	FILE *fp;
@@ -93,6 +171,8 @@ int transfer_meshinfo_storage(uint8_t *seq, uint8_t seq_len, uint8_t *iv, uint8_
 
 	bool is_seq_finded = false;
 	bool is_iv_finded = false;
+	uint32_t seq_number = 0;
+
 
 	unsigned char data[DATA_LEN + DATA_EXTERN_LEN] = {0x00};
 
@@ -134,8 +214,8 @@ int transfer_meshinfo_storage(uint8_t *seq, uint8_t seq_len, uint8_t *iv, uint8_
 		remain_len = ftell(fp);
 
 		long read_len = fread(data, 1, DATA_LEN + DATA_EXTERN_LEN, fp);
-		printf("read_len = %ld\n", read_len);
-		printf("remain_len = %ld\n\n", remain_len);
+		// printf("read_len = %ld\n", read_len);
+		// printf("remain_len = %ld\n\n", remain_len);
 		// HEX_DUMP(data, read_len, "hex dump");
 
 		if (!is_iv_finded) {
@@ -143,21 +223,25 @@ int transfer_meshinfo_storage(uint8_t *seq, uint8_t seq_len, uint8_t *iv, uint8_
 			void *p = mempbrk(data, read_len, "IV=", strlen("IV="), iv_len);
 
 			if (NULL != p) {
-				// HEX_DUMP(p, iv_len, "iv struct");
+				HEX_DUMP(p, iv_len, "iv struct");
 				memcpy(iv, p, iv_len);
 				is_iv_finded = true;
 			}
 		}
 
-		if (!is_seq_finded) {
-
-			void *p = mempbrk(data, read_len, "Seq=", strlen("Seq="), seq_len);
+		void *p = mempbrk(data, read_len, "Seq=", strlen("Seq="), seq_len);
 		
-			if (NULL != p) {
-				// HEX_DUMP(p, seq_len, "seq number");
+		if (NULL != p) {
+
+			HEX_DUMP(p, seq_len, "seq number");
+
+			if (seq_number <= sys_get_le24(p)) {
+				seq_number = sys_get_le24(p);
+				printf("seq number = %x\n", seq_number);
 				memcpy(seq, p, seq_len);
-				is_seq_finded = true;
 			}
+
+			is_seq_finded = true;
 		}
 
 		if (is_seq_finded && is_iv_finded) {
@@ -168,18 +252,35 @@ int transfer_meshinfo_storage(uint8_t *seq, uint8_t seq_len, uint8_t *iv, uint8_
 
 	fclose(fp);
 
-	return 0;
-}
-
-int main() {
-
-	uint8_t seq[3] = {0x00};
-	uint8_t iv[5] = {0x00};
-
-	if (0 == transfer_meshinfo_storage(seq, sizeof(seq), iv, sizeof(iv))) {
-		printf("iv struct = %02x%02x%02x%02x%02x\n", iv[0], iv[1], iv[2], iv[3], iv[4]);
-		printf("seq number = %02x%02x%02x\n", seq[0], seq[1], seq[2]);
+	if ((is_iv_finded == false) || (is_seq_finded == false)) {
+		return -1;
 	}
 
 	return 0;
 }
+
+int main()
+{
+	if ((access(SOURCE_FILE_NAME, F_OK)) == 0) {
+
+		printf("%s is exist\n", SOURCE_FILE_NAME);
+
+		uint8_t seq[3] = {0x00};
+		uint8_t iv[5] = {0x00};
+
+		if (0 == transfer_meshinfo_storage(seq, sizeof(seq), iv, sizeof(iv))) {
+
+			printf("iv struct = %02x%02x%02x%02x%02x\n", iv[0], iv[1], iv[2], iv[3], iv[4]);
+			printf("seq number = %02x%02x%02x\n", seq[0], seq[1], seq[2]);
+
+			save_meshinfo2unqlite(seq, sizeof(seq), iv, sizeof(iv));
+		}
+
+		if (0 == remove(SOURCE_FILE_NAME)) {
+			printf("remove %s success\n", SOURCE_FILE_NAME);
+		}
+	}
+
+	return 0;
+}
+
