@@ -2,10 +2,6 @@
 每个应用可以到各自目录进行编译，也可以在根目录统一编译（此种方式编译，会使用envsetup.sh中所选择的工具链）
 
 compile:
-
-1.source build/$target/envsetup.sh
-2.make
-3.make subtarget
-4.make clean
-5.make dist
+1. source build/$target/envsetup.sh
+2. ./autogen.sh external/valgrind-3.15.0
 
