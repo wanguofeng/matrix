@@ -1,0 +1,5 @@
+m_coredump/libcoregrind_arm_linux_a-coredump-solaris.o: \
+ m_coredump/coredump-solaris.c \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h:

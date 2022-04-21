@@ -1,0 +1,42 @@
+memcheck_arm_linux-mc_main_asm.o: mc_main_asm.c \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h \
+ ../include/pub_tool_basics.h ../VEX/pub/libvex_basictypes.h \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/lib/gcc/arm-linux-gnueabihf/6.3.1/include/stdarg.h \
+ ../include/pub_tool_poolalloc.h ../include/pub_tool_basics.h \
+ ../include/pub_tool_hashtable.h ../include/pub_tool_tooliface.h \
+ ../include/pub_tool_errormgr.h ../include/pub_tool_execontext.h \
+ ../include/pub_tool_debuginfo.h ../include/pub_tool_xarray.h \
+ ../VEX/pub/libvex.h ../VEX/pub/libvex_basictypes.h \
+ ../VEX/pub/libvex_ir.h mc_include.h
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h:
+
+../include/pub_tool_basics.h:
+
+../VEX/pub/libvex_basictypes.h:
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/lib/gcc/arm-linux-gnueabihf/6.3.1/include/stdarg.h:
+
+../include/pub_tool_poolalloc.h:
+
+../include/pub_tool_basics.h:
+
+../include/pub_tool_hashtable.h:
+
+../include/pub_tool_tooliface.h:
+
+../include/pub_tool_errormgr.h:
+
+../include/pub_tool_execontext.h:
+
+../include/pub_tool_debuginfo.h:
+
+../include/pub_tool_xarray.h:
+
+../VEX/pub/libvex.h:
+
+../VEX/pub/libvex_basictypes.h:
+
+../VEX/pub/libvex_ir.h:
+
+mc_include.h:

@@ -1,0 +1,31 @@
+priv/libvex_arm_linux_a-s390_disasm.o: priv/s390_disasm.c \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/lib/gcc/arm-linux-gnueabihf/6.3.1/include/stdarg.h \
+ ../VEX/pub/libvex_basictypes.h priv/main_util.h \
+ ../VEX/pub/libvex_inner.h ../config.h priv/main_globals.h \
+ ../VEX/pub/libvex.h ../VEX/pub/libvex_basictypes.h \
+ ../VEX/pub/libvex_ir.h priv/s390_defs.h priv/s390_disasm.h
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h:
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/lib/gcc/arm-linux-gnueabihf/6.3.1/include/stdarg.h:
+
+../VEX/pub/libvex_basictypes.h:
+
+priv/main_util.h:
+
+../VEX/pub/libvex_inner.h:
+
+../config.h:
+
+priv/main_globals.h:
+
+../VEX/pub/libvex.h:
+
+../VEX/pub/libvex_basictypes.h:
+
+../VEX/pub/libvex_ir.h:
+
+priv/s390_defs.h:
+
+priv/s390_disasm.h:

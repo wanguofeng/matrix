@@ -1,0 +1,16 @@
+prefix=/home/wanguofeng/Workspace/myself/matrix/matrix/output/amlogic/valgrind
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include/valgrind
+arch=arm
+os=linux
+platform=arm-linux
+valt_load_address=0x58000000
+
+Name: Valgrind
+Description: A dynamic binary instrumentation framework
+Version: 3.15.0
+Requires:
+Libs: -L${libdir}/valgrind -lcoregrind-arm-linux -lvex-arm-linux -lgcc
+Cflags: -I${includedir}
+

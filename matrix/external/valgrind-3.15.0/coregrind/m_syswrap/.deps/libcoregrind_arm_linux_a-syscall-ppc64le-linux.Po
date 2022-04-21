@@ -1,0 +1,12 @@
+m_syswrap/libcoregrind_arm_linux_a-syscall-ppc64le-linux.o: \
+ m_syswrap/syscall-ppc64le-linux.S \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h \
+ pub_core_basics_asm.h ../include/pub_tool_basics_asm.h ../config.h
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h:
+
+pub_core_basics_asm.h:
+
+../include/pub_tool_basics_asm.h:
+
+../config.h:

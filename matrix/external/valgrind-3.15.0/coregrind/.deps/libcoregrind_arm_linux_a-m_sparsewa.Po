@@ -1,0 +1,33 @@
+libcoregrind_arm_linux_a-m_sparsewa.o: m_sparsewa.c \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h \
+ pub_core_basics.h ../include/pub_tool_basics.h \
+ ../VEX/pub/libvex_basictypes.h \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/lib/gcc/arm-linux-gnueabihf/6.3.1/include/stdarg.h \
+ pub_core_libcassert.h ../include/pub_tool_libcassert.h \
+ ../include/pub_tool_basics.h pub_core_libcbase.h \
+ ../include/pub_tool_libcbase.h pub_core_sparsewa.h \
+ ../include/pub_tool_sparsewa.h
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h:
+
+pub_core_basics.h:
+
+../include/pub_tool_basics.h:
+
+../VEX/pub/libvex_basictypes.h:
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/lib/gcc/arm-linux-gnueabihf/6.3.1/include/stdarg.h:
+
+pub_core_libcassert.h:
+
+../include/pub_tool_libcassert.h:
+
+../include/pub_tool_basics.h:
+
+pub_core_libcbase.h:
+
+../include/pub_tool_libcbase.h:
+
+pub_core_sparsewa.h:
+
+../include/pub_tool_sparsewa.h:

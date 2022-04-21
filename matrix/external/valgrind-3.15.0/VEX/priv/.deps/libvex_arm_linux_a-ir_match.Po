@@ -1,0 +1,21 @@
+priv/libvex_arm_linux_a-ir_match.o: priv/ir_match.c \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h \
+ priv/main_util.h ../VEX/pub/libvex_basictypes.h \
+ ../VEX/pub/libvex_inner.h ../config.h priv/ir_match.h \
+ ../VEX/pub/libvex_ir.h ../VEX/pub/libvex_basictypes.h
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h:
+
+priv/main_util.h:
+
+../VEX/pub/libvex_basictypes.h:
+
+../VEX/pub/libvex_inner.h:
+
+../config.h:
+
+priv/ir_match.h:
+
+../VEX/pub/libvex_ir.h:
+
+../VEX/pub/libvex_basictypes.h:

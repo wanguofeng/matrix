@@ -1,0 +1,172 @@
+m_debuginfo/libcoregrind_arm_linux_a-readelf.o: m_debuginfo/readelf.c \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h \
+ pub_core_basics.h ../include/pub_tool_basics.h \
+ ../VEX/pub/libvex_basictypes.h \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/lib/gcc/arm-linux-gnueabihf/6.3.1/include/stdarg.h \
+ pub_core_vki.h ../include/pub_tool_vki.h ../include/vki/vki-linux.h \
+ ../include/vki/vki-posixtypes-arm-linux.h ../include/vki/vki-arm-linux.h \
+ ../include/vki/vki-linux-drm.h pub_core_basics.h pub_core_vkiscnums.h \
+ pub_core_vkiscnums_asm.h ../include/pub_tool_vkiscnums_asm.h \
+ ../include/vki/vki-scnums-arm-linux.h ../include/pub_tool_vkiscnums.h \
+ ../include/pub_tool_vkiscnums_asm.h ../include/pub_tool_basics.h \
+ pub_core_debuginfo.h ../include/pub_tool_debuginfo.h \
+ ../include/pub_tool_xarray.h pub_core_libcbase.h \
+ ../include/pub_tool_libcbase.h pub_core_libcprint.h \
+ ../include/pub_tool_libcprint.h pub_core_libcassert.h \
+ ../include/pub_tool_libcassert.h pub_core_machine.h \
+ ../include/pub_tool_machine.h ../VEX/pub/libvex.h \
+ ../VEX/pub/libvex_basictypes.h ../VEX/pub/libvex_ir.h pub_core_options.h \
+ ../include/pub_tool_options.h pub_core_xarray.h \
+ ../include/pub_tool_xarray.h pub_core_oset.h ../include/pub_tool_oset.h \
+ pub_core_syscall.h pub_core_tooliface.h ../include/pub_tool_tooliface.h \
+ ../include/pub_tool_errormgr.h ../include/pub_tool_execontext.h \
+ ../include/pub_tool_debuginfo.h pub_core_xarray.h \
+ m_debuginfo/priv_misc.h m_debuginfo/priv_image.h \
+ m_debuginfo/priv_d3basics.h m_debuginfo/priv_tytypes.h \
+ m_debuginfo/priv_storage.h pub_core_deduppoolalloc.h \
+ ../include/pub_tool_deduppoolalloc.h m_debuginfo/priv_readelf.h \
+ m_debuginfo/priv_readdwarf.h m_debuginfo/priv_readdwarf3.h \
+ m_debuginfo/priv_readexidx.h ../config.h \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/elf.h \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/features.h \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/sys/cdefs.h \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/bits/wordsize.h \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/gnu/stubs.h \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/gnu/stubs-hard.h \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/lib/gcc/arm-linux-gnueabihf/6.3.1/include/stdint.h \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdint.h \
+ /home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/bits/wchar.h
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdc-predef.h:
+
+pub_core_basics.h:
+
+../include/pub_tool_basics.h:
+
+../VEX/pub/libvex_basictypes.h:
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/lib/gcc/arm-linux-gnueabihf/6.3.1/include/stdarg.h:
+
+pub_core_vki.h:
+
+../include/pub_tool_vki.h:
+
+../include/vki/vki-linux.h:
+
+../include/vki/vki-posixtypes-arm-linux.h:
+
+../include/vki/vki-arm-linux.h:
+
+../include/vki/vki-linux-drm.h:
+
+pub_core_basics.h:
+
+pub_core_vkiscnums.h:
+
+pub_core_vkiscnums_asm.h:
+
+../include/pub_tool_vkiscnums_asm.h:
+
+../include/vki/vki-scnums-arm-linux.h:
+
+../include/pub_tool_vkiscnums.h:
+
+../include/pub_tool_vkiscnums_asm.h:
+
+../include/pub_tool_basics.h:
+
+pub_core_debuginfo.h:
+
+../include/pub_tool_debuginfo.h:
+
+../include/pub_tool_xarray.h:
+
+pub_core_libcbase.h:
+
+../include/pub_tool_libcbase.h:
+
+pub_core_libcprint.h:
+
+../include/pub_tool_libcprint.h:
+
+pub_core_libcassert.h:
+
+../include/pub_tool_libcassert.h:
+
+pub_core_machine.h:
+
+../include/pub_tool_machine.h:
+
+../VEX/pub/libvex.h:
+
+../VEX/pub/libvex_basictypes.h:
+
+../VEX/pub/libvex_ir.h:
+
+pub_core_options.h:
+
+../include/pub_tool_options.h:
+
+pub_core_xarray.h:
+
+../include/pub_tool_xarray.h:
+
+pub_core_oset.h:
+
+../include/pub_tool_oset.h:
+
+pub_core_syscall.h:
+
+pub_core_tooliface.h:
+
+../include/pub_tool_tooliface.h:
+
+../include/pub_tool_errormgr.h:
+
+../include/pub_tool_execontext.h:
+
+../include/pub_tool_debuginfo.h:
+
+pub_core_xarray.h:
+
+m_debuginfo/priv_misc.h:
+
+m_debuginfo/priv_image.h:
+
+m_debuginfo/priv_d3basics.h:
+
+m_debuginfo/priv_tytypes.h:
+
+m_debuginfo/priv_storage.h:
+
+pub_core_deduppoolalloc.h:
+
+../include/pub_tool_deduppoolalloc.h:
+
+m_debuginfo/priv_readelf.h:
+
+m_debuginfo/priv_readdwarf.h:
+
+m_debuginfo/priv_readdwarf3.h:
+
+m_debuginfo/priv_readexidx.h:
+
+../config.h:
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/elf.h:
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/features.h:
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/sys/cdefs.h:
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/bits/wordsize.h:
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/gnu/stubs.h:
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/gnu/stubs-hard.h:
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/lib/gcc/arm-linux-gnueabihf/6.3.1/include/stdint.h:
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/stdint.h:
+
+/home/wanguofeng/Workspace/myself/matrix/matrix/toolchains/toolchain-arm-linux-gnueabihf-6.3.1/arm-linux-gnueabihf/libc/usr/include/bits/wchar.h:
