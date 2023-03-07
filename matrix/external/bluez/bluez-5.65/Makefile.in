@@ -1665,6 +1665,7 @@ tools_mcaptest_OBJECTS = $(am_tools_mcaptest_OBJECTS)
 am__tools_mesh_cfgclient_SOURCES_DIST = tools/mesh-cfgclient.c \
 	tools/mesh/model.h tools/mesh/config-model.h \
 	tools/mesh/cfgcli.h tools/mesh/cfgcli.c tools/mesh/keys.h \
+	tools/mesh/generic-onoff.h tools/mesh/generic-onoff.c \
 	tools/mesh/keys.c tools/mesh/util.h tools/mesh/util.c \
 	tools/mesh/remote.h tools/mesh/remote.c tools/mesh/agent.h \
 	tools/mesh/agent.c tools/mesh/mesh-db.h tools/mesh/mesh-db.c \
@@ -1672,6 +1673,7 @@ am__tools_mesh_cfgclient_SOURCES_DIST = tools/mesh-cfgclient.c \
 @MESH_TRUE@@TOOLS_TRUE@am_tools_mesh_cfgclient_OBJECTS =  \
 @MESH_TRUE@@TOOLS_TRUE@	tools/mesh-cfgclient.$(OBJEXT) \
 @MESH_TRUE@@TOOLS_TRUE@	tools/mesh/cfgcli.$(OBJEXT) \
+@MESH_TRUE@@TOOLS_TRUE@	tools/mesh/generic-onoff.$(OBJEXT) \
 @MESH_TRUE@@TOOLS_TRUE@	tools/mesh/keys.$(OBJEXT) \
 @MESH_TRUE@@TOOLS_TRUE@	tools/mesh/util.$(OBJEXT) \
 @MESH_TRUE@@TOOLS_TRUE@	tools/mesh/remote.$(OBJEXT) \
@@ -2488,6 +2490,7 @@ am__depfiles_remade = android/$(DEPDIR)/a2dp-sink.Po \
 	tools/mesh-gatt/$(DEPDIR)/prov.Po \
 	tools/mesh-gatt/$(DEPDIR)/util.Po \
 	tools/mesh/$(DEPDIR)/agent.Po tools/mesh/$(DEPDIR)/cfgcli.Po \
+	tools/mesh/$(DEPDIR)/generic-onoff.Po \
 	tools/mesh/$(DEPDIR)/keys.Po tools/mesh/$(DEPDIR)/mesh-db.Po \
 	tools/mesh/$(DEPDIR)/remote.Po tools/mesh/$(DEPDIR)/util.Po \
 	tools/parser/$(DEPDIR)/amp.Po tools/parser/$(DEPDIR)/att.Po \
@@ -3775,6 +3778,7 @@ unit_tests = $(am__append_55) unit/test-eir unit/test-uuid \
 @MESH_TRUE@@TOOLS_TRUE@tools_mesh_cfgclient_SOURCES = tools/mesh-cfgclient.c \
 @MESH_TRUE@@TOOLS_TRUE@				tools/mesh/model.h tools/mesh/config-model.h \
 @MESH_TRUE@@TOOLS_TRUE@				tools/mesh/cfgcli.h tools/mesh/cfgcli.c \
+@MESH_TRUE@@TOOLS_TRUE@				tools/mesh/generic-onoff.h tools/mesh/generic-onoff.c \
 @MESH_TRUE@@TOOLS_TRUE@				tools/mesh/keys.h tools/mesh/keys.c \
 @MESH_TRUE@@TOOLS_TRUE@				tools/mesh/util.h tools/mesh/util.c \
 @MESH_TRUE@@TOOLS_TRUE@				tools/mesh/remote.h tools/mesh/remote.c \
@@ -6308,6 +6312,8 @@ tools/mesh/$(DEPDIR)/$(am__dirstamp):
 	@: > tools/mesh/$(DEPDIR)/$(am__dirstamp)
 tools/mesh/cfgcli.$(OBJEXT): tools/mesh/$(am__dirstamp) \
 	tools/mesh/$(DEPDIR)/$(am__dirstamp)
+tools/mesh/generic-onoff.$(OBJEXT): tools/mesh/$(am__dirstamp) \
+	tools/mesh/$(DEPDIR)/$(am__dirstamp)
 tools/mesh/keys.$(OBJEXT): tools/mesh/$(am__dirstamp) \
 	tools/mesh/$(DEPDIR)/$(am__dirstamp)
 tools/mesh/util.$(OBJEXT): tools/mesh/$(am__dirstamp) \
@@ -7281,6 +7287,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@tools/mesh-gatt/$(DEPDIR)/util.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@tools/mesh/$(DEPDIR)/agent.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@tools/mesh/$(DEPDIR)/cfgcli.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@tools/mesh/$(DEPDIR)/generic-onoff.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@tools/mesh/$(DEPDIR)/keys.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@tools/mesh/$(DEPDIR)/mesh-db.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@tools/mesh/$(DEPDIR)/remote.Po@am__quote@ # am--include-marker
@@ -12048,6 +12055,7 @@ distclean: distclean-am
 	-rm -f tools/mesh-gatt/$(DEPDIR)/util.Po
 	-rm -f tools/mesh/$(DEPDIR)/agent.Po
 	-rm -f tools/mesh/$(DEPDIR)/cfgcli.Po
+	-rm -f tools/mesh/$(DEPDIR)/generic-onoff.Po
 	-rm -f tools/mesh/$(DEPDIR)/keys.Po
 	-rm -f tools/mesh/$(DEPDIR)/mesh-db.Po
 	-rm -f tools/mesh/$(DEPDIR)/remote.Po
@@ -12694,6 +12702,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f tools/mesh-gatt/$(DEPDIR)/util.Po
 	-rm -f tools/mesh/$(DEPDIR)/agent.Po
 	-rm -f tools/mesh/$(DEPDIR)/cfgcli.Po
+	-rm -f tools/mesh/$(DEPDIR)/generic-onoff.Po
 	-rm -f tools/mesh/$(DEPDIR)/keys.Po
 	-rm -f tools/mesh/$(DEPDIR)/mesh-db.Po
 	-rm -f tools/mesh/$(DEPDIR)/remote.Po
