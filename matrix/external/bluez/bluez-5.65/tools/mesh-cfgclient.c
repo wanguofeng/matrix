@@ -33,6 +33,7 @@
 
 #include "tools/mesh/agent.h"
 #include "tools/mesh/cfgcli.h"
+#include "tools/mesh/generic-onoff.h"
 #include "tools/mesh/keys.h"
 #include "tools/mesh/mesh-db.h"
 #include "tools/mesh/model.h"
@@ -41,8 +42,9 @@
 #define PROMPT_ON	COLOR_BLUE "[mesh-cfgclient]" COLOR_OFF "# "
 #define PROMPT_OFF	"Waiting to connect to bluetooth-meshd..."
 
-#define CFG_SRV_MODEL	0x0000
-#define CFG_CLI_MODEL	0x0001
+#define CFG_SRV_MODEL				0x0000
+#define CFG_CLI_MODEL				0x0001
+#define GENERIC_ONOFF_CLI_MODEL		0x1001
 
 #define UNPROV_SCAN_MAX_SECS	300
 
@@ -57,7 +59,7 @@
 struct meshcfg_el {
 	const char *path;
 	uint8_t index;
-	uint16_t mods[2];
+	uint16_t mods[3];
 };
 
 struct meshcfg_app {
@@ -102,6 +104,7 @@ static struct l_queue *node_proxies;
 static struct l_dbus_proxy *net_proxy;
 static struct meshcfg_node *local;
 static struct model_info *cfgcli;
+static struct model_info *onoffcli;
 
 static struct l_queue *devices;
 
@@ -130,7 +133,7 @@ static struct meshcfg_app app = {
 	.ele = {
 		.path = "/mesh/cfgclient/ele0",
 		.index = 0,
-		.mods = {CFG_SRV_MODEL, CFG_CLI_MODEL}
+		.mods = {CFG_SRV_MODEL, CFG_CLI_MODEL, GENERIC_ONOFF_CLI_MODEL}
 	}
 };
 
@@ -405,6 +408,12 @@ static void client_init(void)
 {
 	cfgcli = cfgcli_init(send_key, delete_node, (void *) app.ele.path);
 	cfgcli->ops.set_send_func(send_msg, (void *) app.ele.path);
+}
+
+static void generic_onoff_client_init(void)
+{
+	onoffcli = generic_onoff_init();
+	onoffcli->ops.set_send_func(send_msg, (void *) app.ele.path);
 }
 
 static bool caps_getter(struct l_dbus *dbus,
@@ -717,6 +726,7 @@ static void attach_node_reply(struct l_dbus_proxy *proxy,
 
 	/* Inititalize config client model */
 	client_init();
+	generic_onoff_client_init();
 
 	if (l_dbus_proxy_get_property(local->proxy, "IvIndex", "u", &ivi) &&
 							ivi != iv_index) {
@@ -1684,6 +1694,7 @@ static bool mod_getter(struct l_dbus *dbus,
 	l_dbus_message_builder_enter_array(builder, "(qa{sv})");
 	build_model(builder, app.ele.mods[0], false, false);
 	build_model(builder, app.ele.mods[1], false, false);
+	build_model(builder, app.ele.mods[2], true, true);
 	l_dbus_message_builder_leave_array(builder);
 
 	return true;
@@ -1721,22 +1732,51 @@ static struct l_dbus_message *dev_msg_recv_call(struct l_dbus *dbus,
 	bool rmt;
 
 	if (!l_dbus_message_get_arguments(msg, "qbqay", &src, &rmt, &idx,
-								&iter)) {
-		l_error("Cannot parse received message");
-		return l_dbus_message_new_error(msg, dbus_err_args, NULL);
+															&iter)) {
+			l_error("Cannot parse received message");
+			return l_dbus_message_new_error(msg, dbus_err_args, NULL);
 	}
 
 	if (!l_dbus_message_iter_get_fixed_array(&iter, &data, &n)) {
-		l_error("Cannot parse received message: data");
-		return l_dbus_message_new_error(msg, dbus_err_args, NULL);
+			l_error("Cannot parse received message: data");
+			return l_dbus_message_new_error(msg, dbus_err_args, NULL);
 	}
 
 	bt_shell_printf("Received dev key message (len %u):", n);
 
 	/* Pass to the configuration client */
 	if (cfgcli && cfgcli->ops.recv)
-		cfgcli->ops.recv(src, APP_IDX_DEV_REMOTE, data, n);
+			cfgcli->ops.recv(src, APP_IDX_DEV_REMOTE, data, n);
 
+	return l_dbus_message_new_method_return(msg);
+}
+
+
+static struct l_dbus_message *msg_recv_call(struct l_dbus *dbus,
+						struct l_dbus_message *msg,
+						void *user_data)
+{
+	struct l_dbus_message_iter iter;
+	uint16_t src, idx, dst;
+	uint8_t *data;
+	uint32_t n;
+
+	if (!l_dbus_message_get_arguments(msg, "qqvay", &src, &idx, &dst,
+								&iter)) {
+		bt_shell_printf("Cannot parse received message");
+		return l_dbus_message_new_error(msg, dbus_err_args, NULL);
+	}
+
+	if (!l_dbus_message_iter_get_fixed_array(&iter, &data, &n)) {
+		bt_shell_printf("Cannot parse received message: data");
+		return l_dbus_message_new_error(msg, dbus_err_args, NULL);
+	}
+
+	bt_shell_printf("Received app key message (len %u):", n);
+
+	/* Pass to the configuration client */
+	if (onoffcli && onoffcli->ops.recv)
+		onoffcli->ops.recv(src, idx, data, n);
 	return l_dbus_message_new_method_return(msg);
 }
 
@@ -1756,6 +1796,9 @@ static void setup_ele_iface(struct l_dbus_interface *iface)
 				"remote", "net_index", "data");
 
 	/* TODO: Other methods */
+	l_dbus_interface_method(iface, "MessageReceived", 0,
+				msg_recv_call, "", "qqvay", "source",
+				"app_index", "dist", "data");
 }
 
 static struct l_dbus_message *scan_result_call(struct l_dbus *dbus,
@@ -2323,6 +2366,7 @@ int main(int argc, char *argv[])
 	l_dbus_destroy(dbus);
 
 	cfgcli_cleanup();
+	generic_onoff_cleanup();
 
 	return status;
 }

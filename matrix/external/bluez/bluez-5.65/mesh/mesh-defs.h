@@ -29,7 +29,7 @@
 #define KEY_REFRESH_TRANS_TWO	0x02
 #define KEY_REFRESH_TRANS_THREE	0x03
 
-#define DEFAULT_TTL		0xff
+#define DEFAULT_TTL		0x04
 #define TTL_MASK		0x7f
 
 /* Supported algorithms for provisioning */

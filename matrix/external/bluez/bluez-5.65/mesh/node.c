@@ -1823,7 +1823,7 @@ static struct l_dbus_message *send_call(struct l_dbus *dbus,
 		return dbus_error(msg, MESH_ERROR_INVALID_ARGS,
 							"Key not found");
 
-	if (!mesh_model_send(node, src, dst, app_idx, net_idx, DEFAULT_TTL,
+	if (!mesh_model_send(node, src, dst, app_idx, net_idx, node->ttl,
 						opts.segmented, len, data))
 		return dbus_error(msg, MESH_ERROR_FAILED, NULL);
 

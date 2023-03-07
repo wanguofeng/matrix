@@ -920,7 +920,7 @@ static bool update_model_int_array(uint16_t unicast, uint16_t ele_addr,
 	jarray_int_del(jarray, val);
 
 	if (!add)
-		return true;
+		return save_config();
 
 	jvalue = json_object_new_int(val);
 	if (!jvalue)
@@ -1007,7 +1007,7 @@ static bool update_model_string_array(uint16_t unicast, uint16_t ele_addr,
 	jarray_string_del(jarray, str, len);
 
 	if (!add)
-		return true;
+		return save_config();
 
 	if (!add_array_string(jarray, str))
 		return false;
@@ -2605,4 +2605,37 @@ done:
 		json_object_put(jhdr);
 
 	return result;
+}
+
+uint16_t mesh_db_node_model_bind_app_idx(int16_t unicast, uint16_t ele_addr, bool vendor, uint32_t mod_id)
+{
+	json_object *jarray, *jmod, *jvalue;
+	int i = 0, sz = 0;
+	const uint16_t invalid_app_idx = 0xFFFF;
+
+	if (!cfg || !cfg->jcfg)
+		return invalid_app_idx;
+
+	jmod = get_model(unicast, ele_addr, mod_id, vendor);
+	if (!jmod) {
+		return invalid_app_idx;
+	}
+
+	if (!json_object_object_get_ex(jmod, "bind", &jarray)) {
+		return invalid_app_idx;
+	}
+
+	if (!jarray || json_object_get_type(jarray) != json_type_array) {
+		return invalid_app_idx;
+	}
+
+	sz = json_object_array_length(jarray);
+
+	for (i = 0; i < sz; ++i) {
+		json_object *jentry;
+		jentry = json_object_array_get_idx(jarray, i);
+		return json_object_get_int(jentry);
+	}
+
+	return invalid_app_idx;
 }

@@ -549,6 +549,8 @@ static bool msg_send(struct mesh_node *node, bool cred, uint16_t src,
 		l_error("Failed to Encrypt Payload");
 		goto done;
 	}
+	l_debug("src = %4.4x dst = %4.4x ttl = %2.2x seq_number = %6.6x iv_index = %8.8x cnt = %d interval = %d",
+				 src, dst, ttl, seq_num, iv_index, cnt, interval);
 
 	ret =  mesh_net_app_send(net, cred, src, dst, key_aid, net_idx, ttl,
 					cnt, interval, seq_num, iv_index,

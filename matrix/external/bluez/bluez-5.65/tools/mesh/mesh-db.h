@@ -89,3 +89,6 @@ bool mesh_db_set_app_key(void *expt_cfg, uint16_t net_idx, uint16_t app_idx,
 					uint8_t key[16], uint8_t *old_key);
 void *mesh_db_prepare_export(void);
 bool mesh_db_finish_export(bool is_error, void *expt_cfg, const char *fname);
+
+uint16_t mesh_db_node_model_bind_app_idx(int16_t unicast, uint16_t ele_addr, bool vendor,
+					uint32_t mod_id);

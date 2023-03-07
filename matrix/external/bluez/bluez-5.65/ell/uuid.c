@@ -181,19 +181,19 @@ LIB_EXPORT bool l_uuid_v4(uint8_t out_uuid[16])
  **/
 LIB_EXPORT bool l_uuid_is_valid(const uint8_t uuid[16])
 {
-	unsigned int version;
-	unsigned int variant;
+	// unsigned int version;
+	// unsigned int variant;
 
-	if (!uuid)
-		return false;
+	// if (!uuid)
+	// 	return false;
 
-	variant = uuid[8] >> 6;
-	if (variant != 2)
-		return false;
+	// variant = uuid[8] >> 6;
+	// if (variant != 2)
+	// 	return false;
 
-	version = uuid[6] >> 4;
-	if (version < 1 || version > 5)
-		return false;
+	// version = uuid[6] >> 4;
+	// if (version < 1 || version > 5)
+	// 	return false;
 
 	return true;
 }
