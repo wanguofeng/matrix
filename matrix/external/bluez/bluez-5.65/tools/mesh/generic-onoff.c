@@ -299,7 +299,13 @@ static bool generic_onoff_send(uint8_t *buf, uint16_t len, uint32_t opcode)
 		return false;
 	}
 
-	res = send_msg(send_data, target, 0, buf, len);
+	uint16_t app_idx = mesh_db_node_model_bind_app_idx(target, target, false, GENERIC_ONOFF_SERVER_MODEL_ID);
+
+	bt_shell_printf("Model ID\t%4.4x \"%s\"\n", GENERIC_ONOFF_SERVER_MODEL_ID,
+					sig_model_string(GENERIC_ONOFF_SERVER_MODEL_ID));
+	bt_shell_printf("AppIdx\t\t%u (0x%3.3x)\n ", app_idx, app_idx);
+
+	res = send_msg(send_data, target, app_idx, buf, len);
 	if (!res)
 		bt_shell_printf("Failed to send \"%s\"\n", opcode_str(opcode));
 
