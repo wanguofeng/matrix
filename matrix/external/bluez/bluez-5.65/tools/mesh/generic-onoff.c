@@ -238,7 +238,6 @@ static bool msg_recvd(uint16_t src, uint16_t app_idx,
 
 	bt_shell_printf("On Off Model Message received (%d) opcode %x\n",
 								len, opcode);
-
 	print_byte_array("\t", data, len);
 
 	switch (opcode) {
