@@ -12,3 +12,6 @@ https://jaist.dl.sourceforge.net/project/iperf2/iperf-2.1.4.tar.gz
 
 unqlite:
 git clone https://github.com/symisc/unqlite.git
+
+log-rxi : https://github.com/rxi/log.c.git
+log-easylogger : 

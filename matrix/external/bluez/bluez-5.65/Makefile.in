@@ -1154,15 +1154,12 @@ obexd_src_obexd_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(obexd_src_obexd_CFLAGS) $(CFLAGS) $(obexd_src_obexd_LDFLAGS) \
 	$(LDFLAGS) -o $@
 am__peripheral_btsensor_SOURCES_DIST = peripheral/main.c \
-	peripheral/efivars.h peripheral/efivars.c peripheral/attach.h \
-	peripheral/attach.c peripheral/log.h peripheral/log.c \
+	peripheral/uh_ble.h peripheral/uh_ble.c \
 	peripheral/gap.h peripheral/gap.c peripheral/gatt.h \
 	peripheral/gatt.c
 @TESTING_TRUE@am_peripheral_btsensor_OBJECTS =  \
 @TESTING_TRUE@	peripheral/main.$(OBJEXT) \
-@TESTING_TRUE@	peripheral/efivars.$(OBJEXT) \
-@TESTING_TRUE@	peripheral/attach.$(OBJEXT) \
-@TESTING_TRUE@	peripheral/log.$(OBJEXT) \
+@TESTING_TRUE@	peripheral/uh_ble.$(OBJEXT) \
 @TESTING_TRUE@	peripheral/gap.$(OBJEXT) \
 @TESTING_TRUE@	peripheral/gatt.$(OBJEXT)
 peripheral_btsensor_OBJECTS = $(am_peripheral_btsensor_OBJECTS)
@@ -3574,14 +3571,12 @@ unit_tests = $(am__append_55) unit/test-eir unit/test-uuid \
 @TESTING_TRUE@emulator_hfp_SOURCES = emulator/hfp.c
 @TESTING_TRUE@emulator_hfp_LDADD = src/libshared-mainloop.la
 @TESTING_TRUE@peripheral_btsensor_SOURCES = peripheral/main.c \
-@TESTING_TRUE@				peripheral/efivars.h peripheral/efivars.c \
-@TESTING_TRUE@				peripheral/attach.h peripheral/attach.c \
-@TESTING_TRUE@				peripheral/log.h peripheral/log.c \
+@TESTING_TRUE@				peripheral/uh_ble.h peripheral/uh_ble.c \
 @TESTING_TRUE@				peripheral/gap.h peripheral/gap.c \
 @TESTING_TRUE@				peripheral/gatt.h peripheral/gatt.c
 
 @TESTING_TRUE@peripheral_btsensor_LDADD = src/libshared-mainloop.la \
-@TESTING_TRUE@				lib/libbluetooth-internal.la
+@TESTING_TRUE@				lib/libbluetooth-internal.la -lpthread
 
 @TESTING_TRUE@tools_3dsp_SOURCES = tools/3dsp.c monitor/bt.h
 @TESTING_TRUE@tools_3dsp_LDADD = src/libshared-mainloop.la
