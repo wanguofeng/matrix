@@ -19,6 +19,11 @@
 #include "lib/mgmt.h"
 #include "src/shared/util.h"
 #include "src/shared/mgmt.h"
+
+#include "monitor/bt.h"
+#include "src/shared/hci.h"
+#include "src/shared/crypto.h"
+
 #include "peripheral/gatt.h"
 #include "peripheral/gap.h"
 
@@ -36,6 +41,8 @@ static bool require_connectable = true;
 static uint8_t static_addr[6] = { 0x00 };
 static uint8_t dev_name[260] = { 0x00, };
 static uint8_t dev_name_len = 0;
+
+static struct bt_hci *hci_dev;
 
 #define L_ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -156,21 +163,16 @@ static const char *opcode_str(uint32_t opcode)
 	return cmd->desc;
 }
 
-static bluez_gap_event_callback_func g_event_cb = NULL;
-static bluez_gap_cmd_callback_func g_cmd_cb = NULL;
-
 static void cmd_callback(uint16_t cmd, int8_t status, uint16_t len,
 					const void *param, void *user_data)
 {
-	if (g_cmd_cb == NULL)
-		g_cmd_cb(cmd, status, len, param, user_data);
+
 }
 
 static void event_callback(uint16_t event, uint16_t index, uint16_t length,
 							const void *param, void *user_data)
 {
-	if (g_event_cb == NULL)
-		g_event_cb(event, index, length, param, user_data);
+
 }
 
 static void add_advertising(uint16_t index)
@@ -209,21 +211,33 @@ static void enable_advertising(uint16_t index)
 	mgmt_send(mgmt, MGMT_OP_SET_CONNECTABLE, index, 1, &val,
 						NULL, NULL, NULL);
 
-	val = 0x01;
-	mgmt_send(mgmt, MGMT_OP_SET_POWERED, index, 1, &val,
-						NULL, NULL, NULL);
+	// val = 0x01;
+	// mgmt_send(mgmt, MGMT_OP_SET_POWERED, index, 1, &val,
+	// 					NULL, NULL, NULL);
 
 	printf("adv_instances = %d\n", adv_instances);
 	
-	// if (adv_instances) {
+	if (adv_instances) {
 
-	// 	add_advertising(index);
-	// 	return;
-	// }
+		add_advertising(index);
+		return;
+	}
 
-	// val = require_connectable ? 0x01 : 0x02;
-	// mgmt_send(mgmt, MGMT_OP_SET_ADVERTISING, index, 1, &val,
-	// 					NULL, NULL, NULL);
+	val = require_connectable ? 0x01 : 0x02;
+	mgmt_send(mgmt, MGMT_OP_SET_ADVERTISING, index, 1, &val,
+						NULL, NULL, NULL);
+}
+
+void bluez_gap_adv_stop()
+{
+	uint8_t val = 0x00;
+	mgmt_send(mgmt, MGMT_OP_SET_ADVERTISING, mgmt_index, 1, &val,
+						NULL, NULL, NULL);
+}
+
+void bluez_gap_adv_start()
+{
+	// enable_advertising(mgmt_index);
 }
 
 static void new_settings_event(uint16_t index, uint16_t length,
@@ -377,56 +391,62 @@ static void read_info_complete(uint8_t status, uint16_t len,
 
 	memcpy(static_addr, (uint8_t *)&rp->bdaddr, 6);
 
-	mgmt_register(mgmt, MGMT_EV_NEW_SETTINGS, index,
-					new_settings_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_LOCAL_NAME_CHANGED, index,
-					local_name_changed_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_NEW_LONG_TERM_KEY, index,
-					new_long_term_key_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_DEVICE_CONNECTED, index,
-					device_connected_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_DEVICE_DISCONNECTED, index,
-					device_disconnected_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_USER_CONFIRM_REQUEST, index,
-					user_confirm_request_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_USER_PASSKEY_REQUEST, index,
-					user_passkey_request_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_AUTH_FAILED, index,
-					auth_failed_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_DEVICE_UNPAIRED, index,
-					device_unpaired_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_PASSKEY_NOTIFY, index,
-					passkey_notify_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_NEW_IRK, index,
-					new_irk_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_NEW_CSRK, index,
-					new_csrk_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_NEW_CONN_PARAM, index,
-					new_conn_param_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_ADVERTISING_ADDED, index,
-					advertising_added_event, NULL, NULL);
-	mgmt_register(mgmt, MGMT_EV_ADVERTISING_REMOVED, index,
-					advertising_removed_event, NULL, NULL);
-
-	dev_name_len = snprintf((char *) dev_name, 26, "uhos gatt-server demo");
-
-	if (current_settings & MGMT_SETTING_POWERED) {
-		val = 0x00;
-		mgmt_send(mgmt, MGMT_OP_SET_POWERED, index, 1, &val,
-							NULL, NULL, NULL);
+	hci_dev = bt_hci_new_user_channel(mgmt_index);
+	if (!hci_dev) {
+		fprintf(stderr, "Failed to open HCI for advertiser\n");
+		return;
 	}
 
-	if (!(current_settings & MGMT_SETTING_LE)) {
-		val = 0x01;
-		mgmt_send(mgmt, MGMT_OP_SET_LE, index, 1, &val,
-							NULL, NULL, NULL);
-	}
+	// mgmt_register(mgmt, MGMT_EV_NEW_SETTINGS, index,
+	// 				new_settings_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_LOCAL_NAME_CHANGED, index,
+	// 				local_name_changed_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_NEW_LONG_TERM_KEY, index,
+	// 				new_long_term_key_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_DEVICE_CONNECTED, index,
+	// 				device_connected_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_DEVICE_DISCONNECTED, index,
+	// 				device_disconnected_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_USER_CONFIRM_REQUEST, index,
+	// 				user_confirm_request_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_USER_PASSKEY_REQUEST, index,
+	// 				user_passkey_request_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_AUTH_FAILED, index,
+	// 				auth_failed_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_DEVICE_UNPAIRED, index,
+	// 				device_unpaired_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_PASSKEY_NOTIFY, index,
+	// 				passkey_notify_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_NEW_IRK, index,
+	// 				new_irk_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_NEW_CSRK, index,
+	// 				new_csrk_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_NEW_CONN_PARAM, index,
+	// 				new_conn_param_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_ADVERTISING_ADDED, index,
+	// 				advertising_added_event, NULL, NULL);
+	// mgmt_register(mgmt, MGMT_EV_ADVERTISING_REMOVED, index,
+	// 				advertising_removed_event, NULL, NULL);
 
-	if (!(current_settings & MGMT_SETTING_CONNECTABLE)) {
-		val = 0x01;
-		mgmt_send(mgmt, MGMT_OP_SET_CONNECTABLE, index, 1, &val,
-							NULL, NULL, NULL);
-	}
+	// dev_name_len = snprintf((char *) dev_name, 26, "uhos gatt-server demo");
+
+	// if (current_settings & MGMT_SETTING_POWERED) {
+	// 	val = 0x00;
+	// 	mgmt_send(mgmt, MGMT_OP_SET_POWERED, index, 1, &val,
+	// 						NULL, NULL, NULL);
+	// }
+
+	// if (!(current_settings & MGMT_SETTING_LE)) {
+	// 	val = 0x01;
+	// 	mgmt_send(mgmt, MGMT_OP_SET_LE, index, 1, &val,
+	// 						NULL, NULL, NULL);
+	// }
+
+	// if (!(current_settings & MGMT_SETTING_CONNECTABLE)) {
+	// 	val = 0x01;
+	// 	mgmt_send(mgmt, MGMT_OP_SET_CONNECTABLE, index, 1, &val,
+	// 						NULL, NULL, NULL);
+	// }
 
 	// if (current_settings & MGMT_SETTING_BREDR) {
 	// 	val = 0x00;
@@ -434,43 +454,40 @@ static void read_info_complete(uint8_t status, uint16_t len,
 	// 						NULL, NULL, NULL);
 	// }
 
-	if ((supported_settings & MGMT_SETTING_SECURE_CONN) &&
-			!(current_settings & MGMT_SETTING_SECURE_CONN)) {
-		val = 0x01;
-		mgmt_send(mgmt, MGMT_OP_SET_SECURE_CONN, index, 1, &val,
-							NULL, NULL, NULL);
-	}
+	// if ((supported_settings & MGMT_SETTING_SECURE_CONN) &&
+	// 		!(current_settings & MGMT_SETTING_SECURE_CONN)) {
+	// 	val = 0x01;
+	// 	mgmt_send(mgmt, MGMT_OP_SET_SECURE_CONN, index, 1, &val,
+	// 						NULL, NULL, NULL);
+	// }
 
-	if (current_settings & MGMT_SETTING_DEBUG_KEYS) {
-		val = 0x00;
-		mgmt_send(mgmt, MGMT_OP_SET_DEBUG_KEYS, index, 1, &val,
-							NULL, NULL, NULL);
-	}
+	// if (current_settings & MGMT_SETTING_DEBUG_KEYS) {
+	// 	val = 0x00;
+	// 	mgmt_send(mgmt, MGMT_OP_SET_DEBUG_KEYS, index, 1, &val,
+	// 						NULL, NULL, NULL);
+	// }
 
 	/* disable bond support. */
-	if ((current_settings & MGMT_SETTING_BONDABLE)) {
-		val = 0x00;
-		mgmt_send(mgmt, MGMT_OP_SET_BONDABLE, index, 1, &val,
-							NULL, NULL, NULL);
-	}
+	// if ((current_settings & MGMT_SETTING_BONDABLE)) {
+	// 	val = 0x00;
+	// 	mgmt_send(mgmt, MGMT_OP_SET_BONDABLE, index, 1, &val,
+	// 						NULL, NULL, NULL);
+	// }
 
-	// mgmt_send(mgmt, MGMT_OP_SET_STATIC_ADDRESS, index,
-	// 				6, static_addr, NULL, NULL, NULL);
+	// // mgmt_send(mgmt, MGMT_OP_SET_STATIC_ADDRESS, index,
+	// // 				6, static_addr, NULL, NULL, NULL);
 
-	mgmt_send(mgmt, MGMT_OP_SET_LOCAL_NAME, index,
-					260, dev_name, NULL, NULL, NULL);
+	// mgmt_send(mgmt, MGMT_OP_SET_LOCAL_NAME, index,
+	// 				260, dev_name, NULL, NULL, NULL);
 
-	// gatt_set_static_address(static_addr);
-	// gatt_set_device_name(dev_name, dev_name_len);
+	// if (adv_features)
+	// 	mgmt_send(mgmt, MGMT_OP_READ_ADV_FEATURES, mgmt_index, 0, NULL,
+	// 					read_adv_features_complete,
+	// 					UINT_TO_PTR(mgmt_index), NULL);
 
-	if (adv_features)
-		mgmt_send(mgmt, MGMT_OP_READ_ADV_FEATURES, mgmt_index, 0, NULL,
-						read_adv_features_complete,
-						UINT_TO_PTR(mgmt_index), NULL);
-
-	val = 0x01;
-	mgmt_send(mgmt, MGMT_OP_SET_POWERED, index, 1, &val,
-							NULL, NULL, NULL);
+	// val = 0x01;
+	// mgmt_send(mgmt, MGMT_OP_SET_POWERED, index, 1, &val,
+	// 						NULL, NULL, NULL);
 }
 
 void test()
@@ -735,6 +752,7 @@ void bluez_gap_get_address(uint8_t addr[6])
 {
 	if (mgmt_index == MGMT_INDEX_NONE)
 		return;
+
 	memcpy(addr, static_addr, sizeof(static_addr));
 }
 
@@ -745,12 +763,6 @@ void bluez_gap_set_static_address(uint8_t addr[6])
 	printf("Using static address %02x:%02x:%02x:%02x:%02x:%02x\n",
 			static_addr[5], static_addr[4], static_addr[3],
 			static_addr[2], static_addr[1], static_addr[0]);
-}
-
-void bluez_gap_register_callback(bluez_gap_cmd_callback_func cmd_cb, bluez_gap_event_callback_func event_cb)
-{
-	g_cmd_cb = cmd_cb;
-	g_event_cb = event_cb;
 }
 
 void bluez_gap_uinit(void)

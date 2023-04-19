@@ -99,21 +99,22 @@ static struct gatt_conn *gatt_conn_new(int fd)
 	struct gatt_conn *conn;
 	uint16_t mtu = 0;
 
+	printf("%s %d\n", __FUNCTION__, __LINE__);
 	conn = new0(struct gatt_conn, 1);
 	if (!conn)
 		return NULL;
-
+	printf("%s %d\n", __FUNCTION__, __LINE__);
 	conn->att = bt_att_new(fd, false);
 	if (!conn->att) {
 		fprintf(stderr, "Failed to initialze ATT transport layer\n");
 		free(conn);
 		return NULL;
 	}
-
+	printf("%s %d\n", __FUNCTION__, __LINE__);
 	bt_att_set_close_on_unref(conn->att, true);
 	bt_att_register_disconnect(conn->att, gatt_conn_disconnect, conn, NULL);
 
-	bt_att_set_security(conn->att, BT_SECURITY_MEDIUM);
+	bt_att_set_security(conn->att, BT_SECURITY_LOW);
 
 	conn->gatt = bt_gatt_server_new(gatt_db, conn->att, mtu, 0);
 	if (!conn->gatt) {
@@ -122,7 +123,7 @@ static struct gatt_conn *gatt_conn_new(int fd)
 		free(conn);
 		return NULL;
 	}
-
+	printf("%s %d\n", __FUNCTION__, __LINE__);
 	conn->client = bt_gatt_client_new(gatt_cache, conn->att, mtu, 0);
 	if (!conn->gatt) {
 		fprintf(stderr, "Failed to create GATT client\n");
@@ -131,7 +132,7 @@ static struct gatt_conn *gatt_conn_new(int fd)
 		free(conn);
 		return NULL;
 	}
-
+	printf("%s %d\n", __FUNCTION__, __LINE__);
 	bt_gatt_client_ready_register(conn->client, client_ready_callback,
 								conn, NULL);
 	bt_gatt_client_set_service_changed(conn->client,
@@ -146,12 +147,12 @@ static void att_conn_callback(int fd, uint32_t events, void *user_data)
 	struct sockaddr_l2 addr;
 	socklen_t addrlen;
 	int new_fd;
-
+	printf("%s %d\n", __FUNCTION__, __LINE__);
 	if (events & (EPOLLERR | EPOLLHUP)) {
 		mainloop_remove_fd(fd);
 		return;
 	}
-
+	printf("%s %d\n", __FUNCTION__, __LINE__);
 	memset(&addr, 0, sizeof(addr));
 	addrlen = sizeof(addr);
 
@@ -160,14 +161,14 @@ static void att_conn_callback(int fd, uint32_t events, void *user_data)
 		fprintf(stderr, "Failed to accept new ATT connection: %m\n");
 		return;
 	}
-
+	printf("%s %d\n", __FUNCTION__, __LINE__);
 	conn = gatt_conn_new(new_fd);
 	if (!conn) {
 		fprintf(stderr, "Failed to create GATT connection\n");
 		close(new_fd);
 		return;
 	}
-
+	printf("%s %d\n", __FUNCTION__, __LINE__);
 	if (!queue_push_tail(conn_list, conn)) {
 		fprintf(stderr, "Failed to add GATT connection\n");
 		gatt_conn_destroy(conn);
@@ -234,8 +235,7 @@ void gatt_server_start(void)
 	if (att_fd >= 0)
 		return;
 
-	att_fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET | SOCK_CLOEXEC,
-							BTPROTO_L2CAP);
+	att_fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
 	if (att_fd < 0) {
 		fprintf(stderr, "Failed to create ATT server socket: %m\n");
 		return;
@@ -245,7 +245,10 @@ void gatt_server_start(void)
 	addr.l2_family = AF_BLUETOOTH;
 	addr.l2_cid = htobs(ATT_CID);
 	memcpy(&addr.l2_bdaddr, static_addr, 6);
-	addr.l2_bdaddr_type = BDADDR_LE_RANDOM;
+	addr.l2_bdaddr_type = BDADDR_LE_PUBLIC;
+
+	printf("Bind Public-Address: %02x:%02x:%02x:%02x:%02x:%02x\n", static_addr[5], static_addr[4], static_addr[3],
+											static_addr[2], static_addr[1], static_addr[0]);
 
 	if (bind(att_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 		fprintf(stderr, "Failed to bind ATT server socket: %m\n");
@@ -254,7 +257,7 @@ void gatt_server_start(void)
 		return;
 	}
 
-	if (listen(att_fd, 1) < 0) {
+	if (listen(att_fd, 10) < 0) {
 		fprintf(stderr, "Failed to listen on ATT server socket: %m\n");
 		close(att_fd);
 		att_fd = -1;
@@ -272,8 +275,8 @@ void gatt_server_start(void)
 	populate_devinfo_service(gatt_db);
 
 	gatt_cache = gatt_db_new();
-
 	conn_list = queue_new();
+
 	if (!conn_list) {
 		gatt_db_unref(gatt_db);
 		gatt_db = NULL;
@@ -281,6 +284,8 @@ void gatt_server_start(void)
 		att_fd = -1;
 		return;
 	}
+
+	printf("ATT-FD = %d\n", att_fd);
 
 	mainloop_add_fd(att_fd, EPOLLIN, att_conn_callback, NULL, NULL);
 }
@@ -303,3 +308,36 @@ void gatt_server_stop(void)
 	close(att_fd);
 	att_fd = -1;
 }
+
+uint16_t hci_index;
+
+static void signal_callback(int signum, void *user_data)
+{
+	switch (signum) {
+	case SIGINT:
+	case SIGTERM:
+		mainloop_quit();
+		break;
+	}
+}
+
+void * bluez_gatt_daemon(void *arg)
+{
+	int exit_status;
+	
+	hci_index = *(uint16_t * )arg;
+
+	mainloop_init();
+	
+	printf("Bluetooth periperhal ver %s , Select hci_index %d\n", VERSION, hci_index);
+
+	gatt_server_start();
+
+	exit_status = mainloop_run_with_signal(signal_callback, NULL);
+
+	gatt_server_stop();
+
+done:
+    printf("bluez daemon exit_status(%d)\n", exit_status);
+}
+

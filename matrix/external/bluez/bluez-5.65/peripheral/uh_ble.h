@@ -109,9 +109,9 @@ typedef struct uhos_ble_uuid
 typedef enum
 {
     UHOS_BLE_ADV_TYPE_CONNECTABLE_UNDIRECTED,           //<! 可连接的非定向广播
+    UHOS_BLE_ADV_TYPE_CONNECTABLE_DIRECTED_HDC,         //<! 可连接的定向广播， high duty cycle
     UHOS_BLE_ADV_TYPE_SCANNABLE_UNDIRECTED,             //<! 可扫描的非定向广播
     UHOS_BLE_ADV_TYPE_NON_CONNECTABLE_UNDIRECTED,       //<! 不可连接的非定向广播
-    UHOS_BLE_ADV_TYPE_CONNECTABLE_DIRECTED_HDC,         //<! 可连接的定向广播， high duty cycle
     UHOS_BLE_ADV_TYPE_CONNECTABLE_DIRECTED_LDC          //<! 可连接的定向广播，low duty cycle
 } uhos_ble_gap_adv_type_t;
 

@@ -1156,12 +1156,13 @@ obexd_src_obexd_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 am__peripheral_btsensor_SOURCES_DIST = peripheral/main.c \
 	peripheral/uh_ble.h peripheral/uh_ble.c \
 	peripheral/gap.h peripheral/gap.c peripheral/gatt.h \
-	peripheral/gatt.c
+	peripheral/gatt.c peripheral/advtest.c
 @TESTING_TRUE@am_peripheral_btsensor_OBJECTS =  \
 @TESTING_TRUE@	peripheral/main.$(OBJEXT) \
 @TESTING_TRUE@	peripheral/uh_ble.$(OBJEXT) \
 @TESTING_TRUE@	peripheral/gap.$(OBJEXT) \
-@TESTING_TRUE@	peripheral/gatt.$(OBJEXT)
+@TESTING_TRUE@	peripheral/gatt.$(OBJEXT) \
+@TESTING_TRUE@	peripheral/advtest.$(OBJEXT)
 peripheral_btsensor_OBJECTS = $(am_peripheral_btsensor_OBJECTS)
 @TESTING_TRUE@peripheral_btsensor_DEPENDENCIES =  \
 @TESTING_TRUE@	src/libshared-mainloop.la \
@@ -3573,7 +3574,7 @@ unit_tests = $(am__append_55) unit/test-eir unit/test-uuid \
 @TESTING_TRUE@peripheral_btsensor_SOURCES = peripheral/main.c \
 @TESTING_TRUE@				peripheral/uh_ble.h peripheral/uh_ble.c \
 @TESTING_TRUE@				peripheral/gap.h peripheral/gap.c \
-@TESTING_TRUE@				peripheral/gatt.h peripheral/gatt.c
+@TESTING_TRUE@				peripheral/gatt.h peripheral/gatt.c peripheral/advtest.c
 
 @TESTING_TRUE@peripheral_btsensor_LDADD = src/libshared-mainloop.la \
 @TESTING_TRUE@				lib/libbluetooth-internal.la -lpthread

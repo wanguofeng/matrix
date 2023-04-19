@@ -109,7 +109,7 @@ emulator_hfp_LDADD = src/libshared-mainloop.la
 peripheral_btsensor_SOURCES = peripheral/main.c \
 				peripheral/uh_ble.h peripheral/uh_ble.c \
 				peripheral/gap.h peripheral/gap.c \
-				peripheral/gatt.h peripheral/gatt.c
+				peripheral/gatt.h peripheral/gatt.c peripheral/advtest.c
 peripheral_btsensor_LDADD = src/libshared-mainloop.la \
 				lib/libbluetooth-internal.la -lpthread
 
