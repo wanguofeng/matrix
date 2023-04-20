@@ -52,29 +52,18 @@ static void signal_callback(int signum, void *user_data)
 }
 
 static pthread_t bluez_daemon_tid = (pthread_t)0;
-
-static void * bluez_daemon(void *arg) {
+static void * bluez_daemon(void *arg)
+{
 	
-	int exit_status;
-
-    sem_t * bluez_sem = (sem_t *)arg;
-	
+	int exit_status = 0;
+    uint16_t hci_index = *(uint16_t *) arg;
+    printf("Bluetooth periperhal ver %s, hci_index = %d\n", VERSION, hci_index);
 	mainloop_init();
-
-	printf("Bluetooth periperhal ver %s\n", VERSION);
-	
-    // bluez_gap_set_mgmt_index(1);
-
 	bluez_gap_init();
-
-    sem_post(bluez_sem);
-	
+    bluez_gap_adapter_init(1);
     exit_status = mainloop_run_with_signal(signal_callback, NULL);
-	
     printf("bluez daemon exit_status(%d)\n", exit_status);
-
 	bluez_gap_uinit();
-	
     pthread_exit(NULL);
 }
 
@@ -115,23 +104,22 @@ uhos_ble_status_t uhos_ble_enable(void)
         return UHOS_BLE_ERROR;
     }
     
-    sem_t bluez_sem;
-	sem_init(&bluez_sem, 0, 0);
-    
-    ret = pthread_create(&bluez_daemon_tid, NULL, bluez_daemon, &bluez_sem);
-    if (ret != 0) {
-        sem_destroy(&bluez_sem);
-        printf("Error creating thread!\n");
-        return UHOS_BLE_ERROR;
-    }
+    // sem_t bluez_sem;
+	// sem_init(&bluez_sem, 0, 0);
+	// sem_post(bluez_sem);
+    // sem_wait(&bluez_sem);
+    // sem_destroy(&bluez_sem);
+    // sem_destroy(&bluez_sem);
 
-    sem_wait(&bluez_sem);
+    uint16_t hci_index = 1;
 
     bluez_gap_register_callback(stack_gap_cmd_callback, stack_gap_event_callback);
 
-    bluez_gap_adapter_init(1);
-
-    sem_destroy(&bluez_sem);
+    ret = pthread_create(&bluez_daemon_tid, NULL, bluez_daemon, &hci_index);
+    if (ret != 0) {
+        printf("Error creating thread!\n");
+        return UHOS_BLE_ERROR;
+    }
 
     return UHOS_BLE_SUCCESS;
 }

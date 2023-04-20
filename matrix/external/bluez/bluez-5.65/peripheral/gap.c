@@ -173,31 +173,74 @@ static void event_callback(uint16_t event, uint16_t index, uint16_t length,
 		g_event_cb(event, index, length, param, user_data);
 }
 
+
+#define MGMT_ADV_FLAG_CONNECTABLE	(1 << 0)
+#define MGMT_ADV_FLAG_DISCOV		(1 << 1)
+#define MGMT_ADV_FLAG_LIMITED_DISCOV	(1 << 2)
+#define MGMT_ADV_FLAG_MANAGED_FLAGS	(1 << 3)
+#define MGMT_ADV_FLAG_TX_POWER		(1 << 4)
+#define MGMT_ADV_FLAG_APPEARANCE	(1 << 5)
+#define MGMT_ADV_FLAG_LOCAL_NAME	(1 << 6)
+#define MGMT_ADV_FLAG_SEC_1M		(1 << 7)
+#define MGMT_ADV_FLAG_SEC_2M		(1 << 8)
+#define MGMT_ADV_FLAG_SEC_CODED		(1 << 9)
+#define MGMT_ADV_FLAG_CAN_SET_TX_POWER	(1 << 10)
+#define MGMT_ADV_FLAG_HW_OFFLOAD	(1 << 11)
+#define MGMT_ADV_PARAM_DURATION		(1 << 12)
+#define MGMT_ADV_PARAM_TIMEOUT		(1 << 13)
+#define MGMT_ADV_PARAM_INTERVALS	(1 << 14)
+#define MGMT_ADV_PARAM_TX_POWER		(1 << 15)
+#define MGMT_ADV_PARAM_SCAN_RSP		(1 << 16)
+
+
+/*
+
+ADV_SCAN_IND:
+	cp->flags = cpu_to_le32(0);
+	scan_rsp is not empty;
+
+
+ADV_IND:
+	cp->flags = cpu_to_le32(MGMT_ADV_FLAG_CONNECTABLE);
+
+
+ADV_NONCONN_IND:
+	cp->flags = cpu_to_le32(0);
+	cp->scan_rsp_len = 0;
+
+*/
+
 static void add_advertising(uint16_t index)
 {
 	const char ad[] = { 0x11, 0x15,
 			0xd0, 0x00, 0x2d, 0x12, 0x1e, 0x4b, 0x0f, 0xa4,
 			0x99, 0x4e, 0xce, 0xb5, 0x31, 0xf4, 0x05, 0x79 };
+
+	// const char scan_rsp[] = { 0x07, 0x09, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36 };
 	struct mgmt_cp_add_advertising *cp;
 	void *buf;
 
+	// buf = malloc(sizeof(*cp) + sizeof(ad) + sizeof(scan_rsp));
 	buf = malloc(sizeof(*cp) + sizeof(ad));
 	if (!buf)
 		return;
 
+	// memset(buf, 0, sizeof(*cp) + sizeof(ad) + sizeof(scan_rsp));
 	memset(buf, 0, sizeof(*cp) + sizeof(ad));
 	cp = buf;
 	cp->instance = 0x01;
-	cp->flags = cpu_to_le32((1 << 0) | (1 << 1) | (1 << 4));
+	cp->flags = cpu_to_le32(0);
 	cp->duration = cpu_to_le16(0);
 	cp->timeout = cpu_to_le16(0);
 	cp->adv_data_len = sizeof(ad);
 	cp->scan_rsp_len = 0;
+	// cp->scan_rsp_len = sizeof(scan_rsp);
 	memcpy(cp->data, ad, sizeof(ad));
-
+	// memcpy(cp->data + cp->adv_data_len, scan_rsp, cp->scan_rsp_len);
+	// mgmt_send(mgmt, MGMT_OP_ADD_ADVERTISING, index,
+	// 		sizeof(*cp) + sizeof(ad) + sizeof(scan_rsp), buf, NULL, NULL, NULL);
 	mgmt_send(mgmt, MGMT_OP_ADD_ADVERTISING, index,
 			sizeof(*cp) + sizeof(ad), buf, NULL, NULL, NULL);
-
 	free(buf);
 }
 
@@ -316,6 +359,171 @@ static void advertising_removed_event(uint16_t index, uint16_t length,
 	printf("Advertising removed\n");
 }
 
+static size_t bin2hex(const uint8_t *buf, size_t buflen, char *str,
+								size_t strlen)
+{
+	size_t i;
+
+	for (i = 0; i < buflen && i < (strlen / 2); i++)
+		sprintf(str + (i * 2), "%02x", buf[i]);
+
+	return i;
+}
+
+static char * system_config_type_str(uint16_t type)
+{
+	switch(type) {
+		case 0x0000:
+			return "BR/EDR Page Scan Type";
+		case 0x0001:
+			return "BR/EDR Page Scan Interval";
+		case 0x0002:
+			return "BR/EDR Page Scan Window";
+		case 0x0003:
+			return "BR/EDR Inquiry Scan Type";
+		case 0x0004:
+			return "BR/EDR Inquiry Scan Interval";
+		case 0x0005:
+			return "BR/EDR Inquiry Scan Window";
+		case 0x0006:
+			return "BR/EDR Link Supervision Timeout";
+		case 0x0007:
+			return "BR/EDR Page Timeout";
+		case 0x0008:
+			return "BR/EDR Min Sniff Interval";
+		case 0x0009:
+			return "BR/EDR Max Sniff Interval";
+		case 0x000a:
+			return "LE Advertisement Min Interval";
+		case 0x000b:
+			return "LE Advertisement Max Interval";
+		case 0x000c:
+			return "LE Multi Advertisement Rotation Interval";
+		case 0x000d:
+			return "LE Scanning Interval for auto connect";
+		case 0x000e:
+			return "LE Scanning Window for auto connect";
+		case 0x000f:
+			return "LE Scanning Interval for wake scenarios";
+		case 0x0010:
+			return "LE Scanning Window for wake scenarios";
+		case 0x0011:
+			return "LE Scanning Interval for discovery";
+		case 0x0012:
+			return "LE Scanning Window for discovery";
+		case 0x0013:
+			return "LE Scanning Interval for adv monitoring";
+		case 0x0014:
+			return "LE Scanning Window for adv monitoring";
+		case 0x0015:
+			return "LE Scanning Interval for connect";
+		case 0x0016:
+			return "LE Scanning Window for connect";
+		case 0x0017:
+			return "LE Min Connection Interval";
+		case 0x0018:
+			return "LE Max Connection Interval";
+		case 0x0019:
+			return "LE Connection Latency";
+		case 0x001a:
+			return "LE Connection Supervision Timeout";
+		case 0x001b:
+			return "LE Autoconnect Timeout";
+		default:
+			return "unkonw";
+	}
+}
+
+static void print_mgmt_tlv(void *data, void *user_data)
+{
+	const struct mgmt_tlv *entry = data;
+	char buf[256];
+
+	bin2hex(entry->value, entry->length, buf, sizeof(buf));
+	printf("Type: 0x%04x\tLength: %02hhu\tValue: %s\tName: %s\n", entry->type, entry->length,
+							buf, system_config_type_str(entry->type));
+}
+
+static void set_sysconfig_rsp(uint8_t status, uint16_t len, const void *param,
+								void *user_data)
+{
+	if (status != MGMT_STATUS_SUCCESS) {
+		printf("Could not set default system configuration with status "
+				"0x%02x (%s)\n", status, mgmt_errstr(status));
+	}
+
+	printf("Set default system configuration success\n");
+
+	if (adv_instances) {
+
+		add_advertising(mgmt_index);
+		return;
+	}
+}
+
+static void set_sysconfig()
+{
+	struct mgmt_tlv_list *tlv_list = NULL;
+	uint16_t type;
+	uint8_t length;
+	uint8_t value[256] = {};
+
+	type = 0x000a;
+	length = 0x02;
+	value[0] = 0x00;
+	value[1] = 0x01;
+
+	tlv_list = mgmt_tlv_list_new();
+	if (!tlv_list) {
+		printf("tlv_list failed to init\n");
+		return;
+	}
+
+	if (!mgmt_tlv_add(tlv_list, type, length, value)) {
+			printf("failed to add\n");
+			return;
+	}
+
+	type = 0x000b;
+	length = 0x02;
+	value[0] = 0x00;
+	value[1] = 0x01;
+
+	if (!mgmt_tlv_add(tlv_list, type, length, value)) {
+			printf("failed to add\n");
+			return;
+	}
+
+	mgmt_send_tlv(mgmt, MGMT_OP_SET_DEF_SYSTEM_CONFIG, mgmt_index,
+				tlv_list, set_sysconfig_rsp, NULL, NULL);
+
+	if (tlv_list)
+		mgmt_tlv_list_free(tlv_list);
+}
+
+static void read_sysconfig_rsp(uint8_t status, uint16_t len, const void *param,
+							void *user_data)
+{
+	struct mgmt_tlv_list *tlv_list;
+
+	if (status != 0) {
+		printf("Read system configuration failed with status "
+				"0x%02x (%s)\n", status, mgmt_errstr(status));
+		return;
+	}
+
+	tlv_list = mgmt_tlv_list_load_from_buf(param, len);
+	if (!tlv_list) {
+		printf("Unable to parse response of read system configuration\n");
+		return;
+	}
+
+	mgmt_tlv_list_foreach(tlv_list, print_mgmt_tlv, NULL);
+	mgmt_tlv_list_free(tlv_list);
+
+	set_sysconfig();
+}
+
 static void read_adv_features_complete(uint8_t status, uint16_t len,
 					const void *param, void *user_data)
 {
@@ -335,7 +543,28 @@ static void read_adv_features_complete(uint8_t status, uint16_t len,
 			require_connectable = true;
 	} else
 		require_connectable = false;
+
+	for (int i = 0; i < rp->num_instances; i ++) {
+		struct mgmt_cp_remove_advertising cmd = { 0x00 };
+		cmd.instance = rp->instance[i];
+
+		mgmt_send(mgmt, MGMT_OP_REMOVE_ADVERTISING, mgmt_index, 1, &cmd,
+					NULL, NULL, NULL);
+	}
 	// enable_advertising(index);
+	mgmt_send(mgmt, MGMT_OP_READ_DEF_SYSTEM_CONFIG, mgmt_index, 0, NULL,
+					read_sysconfig_rsp, NULL, NULL);
+}
+
+static void reset_complete(uint8_t status, uint16_t len,
+					const void *param, void *user_data)
+{
+	printf("reset complete\n");
+
+	if (adv_features)
+		mgmt_send(mgmt, MGMT_OP_READ_ADV_FEATURES, mgmt_index, 0, NULL,
+						read_adv_features_complete,
+						UINT_TO_PTR(mgmt_index), NULL);
 }
 
 static void read_info_complete(uint8_t status, uint16_t len,
@@ -422,21 +651,20 @@ static void read_info_complete(uint8_t status, uint16_t len,
 							NULL, NULL, NULL);
 	}
 
-	if (!(current_settings & MGMT_SETTING_CONNECTABLE)) {
-		val = 0x01;
+	if (current_settings & MGMT_SETTING_CONNECTABLE) {
+		val = 0x00;
 		mgmt_send(mgmt, MGMT_OP_SET_CONNECTABLE, index, 1, &val,
 							NULL, NULL, NULL);
 	}
 
-	// if (current_settings & MGMT_SETTING_BREDR) {
-	// 	val = 0x00;
-	// 	mgmt_send(mgmt, MGMT_OP_SET_BREDR, index, 1, &val,
-	// 						NULL, NULL, NULL);
-	// }
+	if (current_settings & MGMT_SETTING_BREDR) {
+		val = 0x00;
+		mgmt_send(mgmt, MGMT_OP_SET_BREDR, index, 1, &val,
+							NULL, NULL, NULL);
+	}
 
-	if ((supported_settings & MGMT_SETTING_SECURE_CONN) &&
-			!(current_settings & MGMT_SETTING_SECURE_CONN)) {
-		val = 0x01;
+	if (current_settings & MGMT_SETTING_SECURE_CONN) {
+		val = 0x00;
 		mgmt_send(mgmt, MGMT_OP_SET_SECURE_CONN, index, 1, &val,
 							NULL, NULL, NULL);
 	}
@@ -457,30 +685,15 @@ static void read_info_complete(uint8_t status, uint16_t len,
 	// mgmt_send(mgmt, MGMT_OP_SET_STATIC_ADDRESS, index,
 	// 				6, static_addr, NULL, NULL, NULL);
 
-	mgmt_send(mgmt, MGMT_OP_SET_LOCAL_NAME, index,
-					260, dev_name, NULL, NULL, NULL);
+	// mgmt_send(mgmt, MGMT_OP_SET_LOCAL_NAME, index,
+	// 				260, dev_name, NULL, NULL, NULL);
 
-	// gatt_set_static_address(static_addr);
-	// gatt_set_device_name(dev_name, dev_name_len);
-
-	if (adv_features)
-		mgmt_send(mgmt, MGMT_OP_READ_ADV_FEATURES, mgmt_index, 0, NULL,
-						read_adv_features_complete,
-						UINT_TO_PTR(mgmt_index), NULL);
+	gatt_set_static_address(static_addr);
+	gatt_set_device_name(dev_name, dev_name_len);
 
 	val = 0x01;
 	mgmt_send(mgmt, MGMT_OP_SET_POWERED, index, 1, &val,
-							NULL, NULL, NULL);
-}
-
-void test()
-{
-	if (adv_features)
-		mgmt_send(mgmt, MGMT_OP_READ_ADV_FEATURES, mgmt_index, 0, NULL,
-						read_adv_features_complete,
-						UINT_TO_PTR(mgmt_index), NULL);
-	else
-		enable_advertising(mgmt_index);
+							reset_complete, UINT_TO_PTR(mgmt_index), NULL);
 }
 
 static void read_index_list_complete(uint8_t status, uint16_t len,
@@ -642,20 +855,20 @@ static void read_commands_complete(uint8_t status, uint16_t len,
 	// 		return;
 	// 	}
 	// } else 
-	{
-		mgmt_register(mgmt, MGMT_EV_INDEX_ADDED, MGMT_INDEX_NONE,
-					index_added_event, NULL, NULL);
+	// {
+	mgmt_register(mgmt, MGMT_EV_INDEX_ADDED, MGMT_INDEX_NONE,
+				index_added_event, NULL, NULL);
 
-		mgmt_register(mgmt, MGMT_EV_INDEX_REMOVED, MGMT_INDEX_NONE,
-					index_removed_event, NULL, NULL);
-                                                 
-		if (!mgmt_send(mgmt, MGMT_OP_READ_INDEX_LIST,
-				MGMT_INDEX_NONE, 0, NULL,
-				read_index_list_complete, NULL, NULL)) {
-			fprintf(stderr, "Failed to read index list\n");
-			return;
-		}
+	mgmt_register(mgmt, MGMT_EV_INDEX_REMOVED, MGMT_INDEX_NONE,
+				index_removed_event, NULL, NULL);
+												
+	if (!mgmt_send(mgmt, MGMT_OP_READ_INDEX_LIST,
+			MGMT_INDEX_NONE, 0, NULL,
+			read_index_list_complete, NULL, NULL)) {
+		fprintf(stderr, "Failed to read index list\n");
+		return;
 	}
+	// }
 }
 
 static void read_version_complete(uint8_t status, uint16_t len,
@@ -679,6 +892,28 @@ static void read_version_complete(uint8_t status, uint16_t len,
 	}
 }
 
+void bluez_gap_get_address(uint8_t addr[6])
+{
+	if (mgmt_index == MGMT_INDEX_NONE)
+		return;
+	memcpy(addr, static_addr, sizeof(static_addr));
+}
+
+void bluez_gap_set_static_address(uint8_t addr[6])
+{
+	memcpy(static_addr, addr, sizeof(static_addr));
+
+	printf("Using static address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			static_addr[5], static_addr[4], static_addr[3],
+			static_addr[2], static_addr[1], static_addr[0]);
+}
+
+void bluez_gap_register_callback(bluez_gap_cmd_callback_func cmd_cb, bluez_gap_event_callback_func event_cb)
+{
+	g_cmd_cb = cmd_cb;
+	g_event_cb = event_cb;
+}
+
 void bluez_gap_init(void)
 {
 	mgmt = mgmt_new_default();
@@ -687,6 +922,31 @@ void bluez_gap_init(void)
 		return;
 	}
 	return ;
+}
+
+void bluez_gap_adapter_init(uint16_t hci_index)
+{
+	mgmt_index = hci_index;
+
+	if (!mgmt_send(mgmt, MGMT_OP_READ_VERSION,
+				MGMT_INDEX_NONE, 0, NULL,
+				read_version_complete, NULL, NULL)) {
+		fprintf(stderr, "Failed to read version\n");
+		return;
+	}
+}
+
+void bluez_gap_uinit(void)
+{
+	if (!mgmt)
+		return;
+
+	// gatt_server_stop();
+
+    mgmt_unref(mgmt);
+	mgmt = NULL;
+
+	mgmt_index = MGMT_INDEX_NONE;
 }
 
 void bluez_gap_test() 
@@ -717,51 +977,4 @@ void bluez_gap_test()
 	sem_destroy(&semaphore);
 
 	printf("%s %d\n", __FUNCTION__, __LINE__);
-}
-
-void bluez_gap_adapter_init(uint16_t hci_index)
-{
-	mgmt_index = hci_index;
-
-	if (!mgmt_send(mgmt, MGMT_OP_READ_VERSION,
-				MGMT_INDEX_NONE, 0, NULL,
-				read_version_complete, NULL, NULL)) {
-		fprintf(stderr, "Failed to read version\n");
-		return;
-	}
-}
-
-void bluez_gap_get_address(uint8_t addr[6])
-{
-	if (mgmt_index == MGMT_INDEX_NONE)
-		return;
-	memcpy(addr, static_addr, sizeof(static_addr));
-}
-
-void bluez_gap_set_static_address(uint8_t addr[6])
-{
-	memcpy(static_addr, addr, sizeof(static_addr));
-
-	printf("Using static address %02x:%02x:%02x:%02x:%02x:%02x\n",
-			static_addr[5], static_addr[4], static_addr[3],
-			static_addr[2], static_addr[1], static_addr[0]);
-}
-
-void bluez_gap_register_callback(bluez_gap_cmd_callback_func cmd_cb, bluez_gap_event_callback_func event_cb)
-{
-	g_cmd_cb = cmd_cb;
-	g_event_cb = event_cb;
-}
-
-void bluez_gap_uinit(void)
-{
-	if (!mgmt)
-		return;
-
-	// gatt_server_stop();
-
-    mgmt_unref(mgmt);
-	mgmt = NULL;
-
-	mgmt_index = MGMT_INDEX_NONE;
 }

@@ -10,8 +10,13 @@ int main(int argc, char *argv[])
 	sleep(5);
 	uhos_ble_address_get(static_addr);
 	printf("Using static address %02x:%02x:%02x:%02x:%02x:%02x\n",
-		static_addr[5], static_addr[4], static_addr[3],
-		static_addr[2], static_addr[1], static_addr[0]);
+								static_addr[5], static_addr[4], static_addr[3],
+								static_addr[2], static_addr[1], static_addr[0]);
+	while(1)
+	{
+		sleep(1);
+	}
+
 	uhos_ble_disable();
 
 	return 0;
