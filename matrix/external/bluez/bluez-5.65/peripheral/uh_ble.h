@@ -225,6 +225,7 @@ typedef enum
 {
     ADV_DATA,      //<! 广播数据
     SCAN_RSP_DATA, //<! 扫描响应数据
+    FULL_DATA,     // ADV_DATA, SCAN_RSP_DATA
 } uhos_ble_gap_adv_data_type_t;
 
 /**

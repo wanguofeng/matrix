@@ -25,6 +25,8 @@
 #include <pthread.h>
 #include <semaphore.h>
 
+#include "src/shared/mgmt.h"
+
 #ifndef WAIT_ANY
 #define WAIT_ANY (-1)
 #endif
@@ -36,9 +38,18 @@
 #include "peripheral/gap.h"
 #include "peripheral/uh_ble.h"
 
+#define CONFIG_LOG_TAG "Bluez_Adapter"
+#include "peripheral/log.h"
+
 /*
  * BLE COMMON
 */
+
+static uhos_ble_status_t uhos_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param);
+
+static pthread_t bluez_daemon_tid = (pthread_t)0;
+static sem_t bluez_adapter_sem;
+
 static void signal_callback(int signum, void *user_data)
 {
 	switch (signum) {
@@ -50,19 +61,21 @@ static void signal_callback(int signum, void *user_data)
 		break;
 	}
 }
-
-static pthread_t bluez_daemon_tid = (pthread_t)0;
 static void * bluez_daemon(void *arg)
 {
-	
 	int exit_status = 0;
     uint16_t hci_index = *(uint16_t *) arg;
-    printf("Bluetooth periperhal ver %s, hci_index = %d\n", VERSION, hci_index);
+
+    LOGI("Bluetooth periperhal ver %s, hci_index = %d", VERSION, hci_index);
+
 	mainloop_init();
 	bluez_gap_init();
-    bluez_gap_adapter_init(1);
+    bluez_gap_adapter_init(hci_index);
+
     exit_status = mainloop_run_with_signal(signal_callback, NULL);
-    printf("bluez daemon exit_status(%d)\n", exit_status);
+
+    LOGI("bluez daemon exit_status(%d)", exit_status);
+
 	bluez_gap_uinit();
     pthread_exit(NULL);
 }
@@ -72,12 +85,66 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
 {
     switch(event)
     {
-        case 0x01:
+        case MGMT_EV_DEVICE_CONNECTED:
+        {
+            #define MGMT_EV_DEVICE_CONNECTED	0x000B
+            const struct mgmt_ev_device_connected *ev = param;
+            uhos_ble_gap_evt_param_t evt_param = {0x00};
+            evt_param.conn_handle = 0x00; // reserved, transfer from ev->addr
+            evt_param.connect.conn_param.conn_sup_timeout = 0x00; // can't get this param;
+            evt_param.connect.conn_param.max_conn_interval = 0x00; // can't get this param;
+            evt_param.connect.conn_param.min_conn_interval = 0x00; // can't get this param;
+            evt_param.connect.conn_param.slave_latency = 0x00; // can't get this param;
+            memcpy(evt_param.connect.peer_addr, ev->addr.bdaddr.b, 6);
+            uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_CONNECTED, &evt_param);
             break;
-        case 0x02:
+        }   
+        case MGMT_EV_DEVICE_DISCONNECTED:
+        {
+            const struct mgmt_ev_device_disconnected *ev = param;
+            uhos_ble_gap_evt_param_t evt_param = {0x00};
+            evt_param.conn_handle = 0x00; // reserved, transfer from ev->addr
+            evt_param.disconnect.reason = ev->reason;
+            uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_DISCONNET, &evt_param);
             break;
-        default:
+        }
+        case MGMT_EV_NEW_CONN_PARAM:
+        {
+            const struct mgmt_ev_new_conn_param * ev = param;
+            uhos_ble_gap_evt_param_t evt_param = {0x00};
+            evt_param.conn_handle = 0x00; // reserved
+            evt_param.update_conn.conn_param.conn_sup_timeout = ev->timeout;
+            evt_param.update_conn.conn_param.max_conn_interval = ev->max_interval;
+            evt_param.update_conn.conn_param.min_conn_interval = ev->min_interval;
+            evt_param.update_conn.conn_param.slave_latency = ev->latency;
+            uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_CONN_PARAM_UPDATED, &evt_param);
             break;
+        }
+        case MGMT_EV_DEVICE_FOUND:
+        {
+            const struct mgmt_ev_device_found * ev = param;
+            uint16_t eir_len;
+            uint32_t flags;
+            if (length < sizeof(*ev)) {
+                LOGE("Too short device_found length (%u bytes)", length);
+                return;
+            }
+            LOGI("adv data len(%d)", ev->eir_len);
+            if (ev->eir_len > 31) {
+                LOGI("len(%d) can't process yet", ev->eir_len);
+                return;
+            }
+            uhos_ble_gap_evt_param_t evt_param = {0x00};
+            evt_param.conn_handle = 0x00; // not used
+            evt_param.report.addr_type = ev->addr.type;
+            evt_param.report.adv_type = FULL_DATA; // can't get adv type(refers PDU Type)
+            evt_param.report.data_len = ev->eir_len;
+            memcpy(evt_param.report.peer_addr, ev->addr.bdaddr.b, 6);
+            evt_param.report.rssi = ev->rssi;;
+            memcpy(evt_param.report.data, ev->eir, ev->eir_len);
+            uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_ADV_REPORT, &evt_param);
+            break;
+        }
     }
 }
 
@@ -86,9 +153,13 @@ static void stack_gap_cmd_callback(uint16_t cmd, int8_t status, uint16_t len,
 {
     switch(cmd)
     {
-        case 0x01:
+        case MGMT_OP_READ_DEF_SYSTEM_CONFIG:
+            LOGI("receive MGMT_OP_READ_DEF_SYSTEM_CONFIG status(%d)", status);
+            sem_post(&bluez_adapter_sem);
             break;
-        case 0x02:
+        case MGMT_OP_SET_POWERED:
+            LOGI("receive MGMT_OP_SET_POWERED status(%d)", status);
+            
             break;
         default:
             break;
@@ -98,28 +169,26 @@ static void stack_gap_cmd_callback(uint16_t cmd, int8_t status, uint16_t len,
 uhos_ble_status_t uhos_ble_enable(void)
 {
     int ret = 0;
+    uint16_t hci_index = 0;
 
     if (bluez_daemon_tid != (pthread_t)0) {
-        printf("bluez daemon is already init\n");
+        LOGI("bluez daemon is already init");
         return UHOS_BLE_ERROR;
     }
-    
-    // sem_t bluez_sem;
-	// sem_init(&bluez_sem, 0, 0);
-	// sem_post(bluez_sem);
-    // sem_wait(&bluez_sem);
-    // sem_destroy(&bluez_sem);
-    // sem_destroy(&bluez_sem);
 
-    uint16_t hci_index = 1;
-
+    sem_init(&bluez_adapter_sem, 0, 0);
     bluez_gap_register_callback(stack_gap_cmd_callback, stack_gap_event_callback);
 
     ret = pthread_create(&bluez_daemon_tid, NULL, bluez_daemon, &hci_index);
     if (ret != 0) {
-        printf("Error creating thread!\n");
+        LOGI("Error creating thread!");
+        sem_destroy(&bluez_adapter_sem);
         return UHOS_BLE_ERROR;
     }
+    
+    sem_wait(&bluez_adapter_sem);
+
+    LOGI("create bluez_daemon success!");
 
     return UHOS_BLE_SUCCESS;
 }
@@ -127,7 +196,7 @@ uhos_ble_status_t uhos_ble_enable(void)
 uhos_ble_status_t uhos_ble_disable(void)
 {
     if (bluez_daemon_tid == (pthread_t)0) {
-        printf("bluez daemon isn't inited yet!\n");
+        LOGI("bluez daemon isn't inited yet!");
         return UHOS_BLE_ERROR;
     }
 
@@ -135,7 +204,7 @@ uhos_ble_status_t uhos_ble_disable(void)
     pthread_join(bluez_daemon_tid, NULL);
     bluez_daemon_tid = (pthread_t)0;
 
-    printf("bluez daemon exit successfully\n");
+    LOGI("bluez daemon exit successfully");
 
     return UHOS_BLE_SUCCESS;
 }
@@ -212,21 +281,28 @@ uhos_ble_status_t uhos_ble_gap_adv_data_set(
     uhos_u8 const *p_sr_data,
     uhos_u8 srdlen)
 {
+    bluez_gap_set_adv_data(p_data, dlen, p_sr_data, srdlen);
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gap_adv_start(uhos_ble_gap_adv_param_t *p_adv_param)
-{
+{  
+    bluez_gap_set_adv_start(p_adv_param->adv_type, p_adv_param->adv_interval_max, p_adv_param->adv_interval_min);
+    LOGI("adv start\r\n\n");
     return UHOS_BLE_SUCCESS; 
 }
 
 uhos_ble_status_t uhos_ble_gap_reset_adv_start(void)
 {
+    bluez_gap_set_adv_restart();
+    LOGI("adv reset\r\n\n");
     return UHOS_BLE_SUCCESS; 
 }
 
 uhos_ble_status_t uhos_ble_gap_adv_stop(void)
 {
+    bluez_gap_set_adv_stop();
+    LOGI("adv stop\r\n\n");
     return UHOS_BLE_SUCCESS; 
 }
 
@@ -234,11 +310,16 @@ uhos_ble_status_t uhos_ble_gap_scan_start(
     uhos_ble_gap_scan_type_t scan_type,
     uhos_ble_gap_scan_param_t scan_param)
 {
+    bluez_gap_set_scan_start(scan_type, scan_param.scan_interval,
+                             scan_param.scan_window, scan_param.timeout);
+    LOGI("scan start\r\n\n");
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gap_scan_stop(void)
 {
+    bluez_gap_set_scan_stop();
+    LOGI("scan stop\r\n\n");
     return UHOS_BLE_SUCCESS;
 }
 
@@ -246,17 +327,20 @@ uhos_ble_status_t uhos_ble_gap_update_conn_params(
     uhos_u16 conn_handle,
     uhos_ble_gap_conn_param_t conn_params)
 {
+    // mgmt 
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gap_disconnect(uhos_u16 conn_handle)
 {
+    // mgmt disconncet;
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gap_connect(uhos_ble_gap_scan_param_t scan_param,
                                               uhos_ble_gap_connect_t conn_param)
 {
+    // gatt client
     return UHOS_BLE_SUCCESS;
 }
 
