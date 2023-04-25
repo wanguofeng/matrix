@@ -257,6 +257,30 @@ ADV_NONCONN_IND:
 	cp->scan_rsp_len = 0;
 */
 
+static void clear_long_term_keys(uint16_t index)
+{
+        struct mgmt_cp_load_long_term_keys cp;
+
+        memset(&cp, 0, sizeof(cp));
+        cp.key_count = cpu_to_le16(0);
+
+        mgmt_send(mgmt, MGMT_OP_LOAD_LONG_TERM_KEYS, index,
+                                        sizeof(cp), &cp, NULL, NULL, NULL);
+}
+
+static void clear_identity_resolving_keys(uint16_t index)
+{
+        struct mgmt_cp_load_irks cp;
+
+        memset(&cp, 0, sizeof(cp));
+        cp.irk_count = cpu_to_le16(0);
+
+        mgmt_send(mgmt, MGMT_OP_LOAD_IRKS, index,
+                                        sizeof(cp), &cp, NULL, NULL, NULL);
+}
+
+
+
 static void add_advertising(uint16_t index)
 {
 	const char ad[] = { 0x11, 0x15,
@@ -689,7 +713,7 @@ static void read_info_complete(uint8_t status, uint16_t len,
 	mgmt_register(mgmt, MGMT_EV_ADVERTISING_REMOVED, index,
 					advertising_removed_event, NULL, NULL);
 
-	dev_name_len = snprintf((char *) dev_name, 26, "uhos gatt-server demo");
+	dev_name_len = snprintf((char *) dev_name, 26, "uhos gatt-server");
 
 	if (current_settings & MGMT_SETTING_POWERED) {
 		val = 0x00;
@@ -733,6 +757,10 @@ static void read_info_complete(uint8_t status, uint16_t len,
 		mgmt_send_wrapper(mgmt, MGMT_OP_SET_BONDABLE, index, 1, &val,
 							NULL, NULL, NULL);
 	}
+
+	clear_long_term_keys(mgmt_index);
+    clear_identity_resolving_keys(mgmt_index);
+
 
 	mgmt_send_wrapper(mgmt, MGMT_OP_SET_STATIC_ADDRESS, index,
 	 				6, static_addr, NULL, NULL, NULL);
@@ -1264,33 +1292,33 @@ void bluez_gap_register_callback(bluez_gap_cmd_callback_func cmd_cb, bluez_gap_e
 	g_event_cb = event_cb;
 }
 
-static void print_debug(const char *str, void *user_data)
-{
-	const char *prefix = user_data;
+// static void print_debug(const char *str, void *user_data)
+// {
+// 	const char *prefix = user_data;
 
-	LOGI("%s%s", prefix, str);
-}
+// 	LOGI("%s%s", prefix, str);
+// }
 
-static void client_cmd_complete(uint16_t opcode, uint8_t status,
-					const void *param, uint8_t len,
-					void *user_data)
-{
-	LOGW("***************** opcode = %04x", opcode);
-	return;
-}
+// static void client_cmd_complete(uint16_t opcode, uint8_t status,
+// 					const void *param, uint8_t len,
+// 					void *user_data)
+// {
+// 	LOGW("***************** opcode = %04x", opcode);
+// 	return;
+// }
 
 
-static void command_hci_callback(uint16_t opcode, const void *param,
-					uint8_t length, void *user_data)
-{
-	LOGE("HCI Command 0x%04x length %u", opcode, length);
-}
+// static void command_hci_callback(uint16_t opcode, const void *param,
+// 					uint8_t length, void *user_data)
+// {
+// 	LOGE("HCI Command 0x%04x length %u", opcode, length);
+// }
 
-static bool hook_callback(const void *data, uint16_t len,
-							void *user_data)
-{
-	LOG_HEXDUMP_DBG(data, len, "hook_callback");
-}
+// static bool hook_callback(const void *data, uint16_t len,
+// 							void *user_data)
+// {
+// 	LOG_HEXDUMP_DBG(data, len, "hook_callback");
+// }
 
 void bluez_gap_init(void)
 {

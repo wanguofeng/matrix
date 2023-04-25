@@ -30,6 +30,9 @@
 #include "src/shared/gatt-client.h"
 #include "peripheral/gatt.h"
 
+#define CONFIG_LOG_TAG "Bluez_Stack"
+#include "peripheral/log.h"
+
 #define ATT_CID 4
 
 #define UUID_GAP 0x1800
@@ -216,16 +219,125 @@ static void populate_gap_service(struct gatt_db *db)
 	gatt_db_service_set_active(service, true);
 }
 
-static void populate_devinfo_service(struct gatt_db *db)
+static void gatt_service_changed_cb(struct gatt_db_attribute *attrib,
+					unsigned int id, uint16_t offset,
+					uint8_t opcode, struct bt_att *att,
+					void *user_data)
 {
-	struct gatt_db_attribute *service;
-	bt_uuid_t uuid;
+	LOGI("Service Changed Read called\n");
 
-	bt_uuid16_create(&uuid, 0x180a);
-	service = gatt_db_add_service(db, &uuid, true, 17);
+	gatt_db_attribute_read_result(attrib, id, 0, NULL, 0);
+}
+
+static uint8_t svc_chngd_enabled = false;
+static uint16_t gatt_svc_chngd_handle = 0x00;
+
+static void gatt_svc_chngd_ccc_read_cb(struct gatt_db_attribute *attrib,
+					unsigned int id, uint16_t offset,
+					uint8_t opcode, struct bt_att *att,
+					void *user_data)
+{
+	struct server *server = user_data;
+	uint8_t value[2];
+
+	LOGI("Service Changed CCC Read called\n");
+
+	value[0] = svc_chngd_enabled ? 0x02 : 0x00;
+	value[1] = 0x00;
+
+	gatt_db_attribute_read_result(attrib, id, 0, value, sizeof(value));
+}
+
+static void gatt_svc_chngd_ccc_write_cb(struct gatt_db_attribute *attrib,
+					unsigned int id, uint16_t offset,
+					const uint8_t *value, size_t len,
+					uint8_t opcode, struct bt_att *att,
+					void *user_data)
+{
+	struct server *server = user_data;
+	uint8_t error = 0;
+
+	LOGI("Service Changed CCC Write called\n");
+
+	if (!value || len != 2) {
+		error = BT_ATT_ERROR_INVALID_ATTRIBUTE_VALUE_LEN;
+		goto done;
+	}
+
+	if (offset) {
+		error = BT_ATT_ERROR_INVALID_OFFSET;
+		goto done;
+	}
+
+	if (value[0] == 0x00)
+		svc_chngd_enabled = false;
+	else if (value[0] == 0x02)
+		svc_chngd_enabled = true;
+	else
+		error = 0x80;
+
+	LOGI("Service Changed Enabled: %s\n",
+				svc_chngd_enabled ? "true" : "false");
+
+done:
+	gatt_db_attribute_write_result(attrib, id, error);
+}
+
+// static void conf_cb(void *user_data)
+// {
+// 	LOGI("Received confirmation\n");
+// }
+
+// static void notify()
+// {
+// 	uint8_t value[4] = {0x01};
+
+// 	struct gatt_conn *conn = queue_peek_head(conn_list);
+
+// 	if (!bt_gatt_server_send_indication(conn->gatt, gatt_svc_chngd_handle,
+// 					value, sizeof(value),
+// 					conf_cb, NULL, NULL))
+// 		LOGI("Failed to initiate indication\n");
+// }
+
+static void populate_gatt_service(struct gatt_db *db)
+{
+	bt_uuid_t uuid;
+	struct gatt_db_attribute *service, *svc_chngd;
+
+	/* Add the GATT service */
+	bt_uuid16_create(&uuid, 0x1801);
+	service = gatt_db_add_service(db, &uuid, true, 4);
+
+	bt_uuid16_create(&uuid, GATT_CHARAC_SERVICE_CHANGED);
+	svc_chngd = gatt_db_service_add_characteristic(service, &uuid,
+			BT_ATT_PERM_READ,
+			BT_GATT_CHRC_PROP_READ | BT_GATT_CHRC_PROP_INDICATE,
+			gatt_service_changed_cb,
+			NULL, NULL);
+
+	gatt_svc_chngd_handle = gatt_db_attribute_get_handle(svc_chngd);
+	LOGI("gatt_svc_chngd_handle = %04x", gatt_svc_chngd_handle);
+
+	bt_uuid16_create(&uuid, GATT_CLIENT_CHARAC_CFG_UUID);
+	gatt_db_service_add_descriptor(service, &uuid,
+				BT_ATT_PERM_READ | BT_ATT_PERM_WRITE,
+				gatt_svc_chngd_ccc_read_cb,
+				gatt_svc_chngd_ccc_write_cb, NULL);
 
 	gatt_db_service_set_active(service, true);
 }
+
+// static void populate_devinfo_service(struct gatt_db *db)
+// {
+// 	struct gatt_db_attribute *service;
+// 	bt_uuid_t uuid;
+
+// 	bt_uuid16_create(&uuid, 0x180a);
+// 	service = gatt_db_add_service(db, &uuid, true, 17);
+
+// 	gatt_db_service_set_active(service, true);
+// }
 
 void gatt_server_start(void)
 {
@@ -246,11 +358,24 @@ void gatt_server_start(void)
 	addr.l2_cid = htobs(ATT_CID);
 	memcpy(&addr.l2_bdaddr, static_addr, 6);
 	addr.l2_bdaddr_type = BDADDR_LE_RANDOM;
-
+	
+	LOGD("bind addr %02x:%02x:%02x:%02x:%02x:%02x\n", static_addr[5], static_addr[4], static_addr[3],
+													  static_addr[2], static_addr[1], static_addr[0]);
+	
 	if (bind(att_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 		fprintf(stderr, "Failed to bind ATT server socket: %m\n");
 		close(att_fd);
 		att_fd = -1;
+		return;
+	}
+
+	struct bt_security btsec;
+	/* Set the security level */
+	memset(&btsec, 0, sizeof(btsec));
+	btsec.level = BT_SECURITY_LOW;
+	if (setsockopt(att_fd, SOL_BLUETOOTH, BT_SECURITY, &btsec,
+							sizeof(btsec)) != 0) {
+		LOGE("Failed to set L2CAP security level");
 		return;
 	}
 
@@ -269,7 +394,8 @@ void gatt_server_start(void)
 	}
 
 	populate_gap_service(gatt_db);
-	populate_devinfo_service(gatt_db);
+	// populate_devinfo_service(gatt_db);
+	populate_gatt_service(gatt_db);
 
 	gatt_cache = gatt_db_new();
 
