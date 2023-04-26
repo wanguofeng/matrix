@@ -20,12 +20,19 @@ void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param
 	{
 		case UHOS_BLE_GAP_EVT_CONNECTED:
 		{
-			uhos_ble_gap_connect_t *t = &param->connect;
-			LOGE("connected");
+			uhos_ble_gap_evt_param_t *evt = param;
+
+			LOGW("connected: handle(%04x) role(%02x)", evt->conn_handle, evt->connect.role);
+			LOGW("connected: peer_addr(%02x:%02x:%02x:%02x:%02x:%02x) type(%02x)", evt->connect.peer_addr[5], evt->connect.peer_addr[4], 
+																			    	evt->connect.peer_addr[3], evt->connect.peer_addr[2],
+																					evt->connect.peer_addr[1], evt->connect.peer_addr[0],
+																					evt->connect.type);
 			break;
 		}
     	case UHOS_BLE_GAP_EVT_DISCONNET:
 		{
+			uhos_ble_gap_evt_param_t *evt = param;
+			LOGW("disconnected handle(%04x) reason(%02x)", evt->conn_handle, evt->disconnect.reason);
 			break;
 		}
     	case UHOS_BLE_GAP_EVT_CONN_PARAM_UPDATED:
@@ -35,7 +42,7 @@ void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param
     	case UHOS_BLE_GAP_EVT_ADV_REPORT:
 		{
 			uhos_ble_gap_adv_report_t * rpt = &param->report;
-			LOGE("peer addr(%02x:%02x:%02x:%02x:%02x:%02x) rssi(%d)", rpt->peer_addr[0], rpt->peer_addr[1], rpt->peer_addr[2],
+			LOGW("peer_addr(%02x:%02x:%02x:%02x:%02x:%02x) rssi(%d)", rpt->peer_addr[0], rpt->peer_addr[1], rpt->peer_addr[2],
 													rpt->peer_addr[3], rpt->peer_addr[4], rpt->peer_addr[5], rpt->rssi);
 			break;
 		}

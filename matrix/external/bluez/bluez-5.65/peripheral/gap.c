@@ -364,6 +364,7 @@ static void device_connected_event(uint16_t index, uint16_t length,
 					const void *param, void *user_data)
 {
 	LOGD("Device connected");
+	LOGD("length = %d", length);
 	event_callback(MGMT_EV_DEVICE_CONNECTED, index, length, param, user_data);
 }
 
@@ -1276,6 +1277,45 @@ void bluez_gap_get_address(uint8_t addr[6])
 	if (mgmt_index == MGMT_INDEX_NONE)
 		return;
 	memcpy(addr, static_addr, sizeof(static_addr));
+}
+
+static void conn_info_rsp(uint8_t status, uint16_t len, const void *param,
+							void *user_data)
+{
+	const struct mgmt_rp_get_conn_info *rp = param;
+	char addr[18];
+	ba2str(&rp->addr.bdaddr, addr);
+
+	if (status) {
+		LOGE("Get Conn Info for %s (%s) failed. status 0x%02x (%s)",
+						addr, typestr(rp->addr.type),
+						status, mgmt_errstr(status));
+	} else {
+		LOGD("Connection Information for %s (%s)",
+						addr, typestr(rp->addr.type));
+		LOGD("\tRSSI %d\tTX power %d\tmaximum TX power %d",
+				rp->rssi, rp->tx_power, rp->max_tx_power);
+	}
+
+	return;
+}
+
+void bluez_gap_get_conn_rssi(uint16_t conn_handle, uint8_t *rssi)
+{
+	struct mgmt_rp_get_conn_info {
+		struct mgmt_addr_info addr;
+		int8_t rssi;
+		int8_t tx_power;
+		int8_t max_tx_power;
+	} __packed;
+
+	struct mgmt_cp_get_conn_info cp = {0x00};
+	
+	if (mgmt_send(mgmt, MGMT_OP_GET_CONN_INFO, mgmt_index, sizeof(cp), &cp,
+					conn_info_rsp, NULL, NULL) == 0) {
+		LOGE("Unable to send get_conn_info cmd");
+		return;
+	}
 }
 
 void bluez_gap_set_static_address(uint8_t addr[6])

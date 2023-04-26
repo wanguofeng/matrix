@@ -37,6 +37,7 @@
 #include "lib/mgmt.h"
 #include "peripheral/gap.h"
 #include "peripheral/uh_ble.h"
+#include "peripheral/conn_info.h" 
 
 #define CONFIG_LOG_TAG "Bluez_Adapter"
 #include "peripheral/log.h"
@@ -87,15 +88,31 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
     {
         case MGMT_EV_DEVICE_CONNECTED:
         {
-            #define MGMT_EV_DEVICE_CONNECTED	0x000B
             const struct mgmt_ev_device_connected *ev = param;
             uhos_ble_gap_evt_param_t evt_param = {0x00};
-            evt_param.conn_handle = 0x00; // reserved, transfer from ev->addr
+
+            uint8_t role = conn_info_get_role_by_addr(ev->addr.bdaddr.b);
+            evt_param.conn_handle = conn_info_generate_handle(role);
+            
+            evt_param.connect.role = role;
+
+            if (ev->addr.type == UHOS_BLE_ADDRESS_TYPE_PUBLIC) {
+                evt_param.connect.type = UHOS_BLE_ADDRESS_TYPE_PUBLIC;
+            }
+            else if (ev->addr.type == BDADDR_LE_RANDOM) {
+                evt_param.connect.type = UHOS_BLE_ADDRESS_TYPE_RANDOM;
+            }
+            else {
+                evt_param.connect.type = 0x02; // unknow;
+            }
+
+            memcpy(evt_param.connect.peer_addr, ev->addr.bdaddr.b, 6);
+
             evt_param.connect.conn_param.conn_sup_timeout = 0x00; // can't get this param;
             evt_param.connect.conn_param.max_conn_interval = 0x00; // can't get this param;
             evt_param.connect.conn_param.min_conn_interval = 0x00; // can't get this param;
             evt_param.connect.conn_param.slave_latency = 0x00; // can't get this param;
-            memcpy(evt_param.connect.peer_addr, ev->addr.bdaddr.b, 6);
+            conn_info_add_gatts(evt_param.conn_handle, evt_param.connect.peer_addr);
             uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_CONNECTED, &evt_param);
             break;
         }   
@@ -103,8 +120,19 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
         {
             const struct mgmt_ev_device_disconnected *ev = param;
             uhos_ble_gap_evt_param_t evt_param = {0x00};
-            evt_param.conn_handle = 0x00; // reserved, transfer from ev->addr
-            evt_param.disconnect.reason = ev->reason;
+            evt_param.conn_handle = conn_info_get_handle_by_addr(ev->addr.bdaddr.b);
+            uint8_t reason = 0;
+            if (ev->reason == MGMT_DEV_DISCONN_REMOTE) {
+                reason = 0x13;
+            } else if (ev->reason == MGMT_DEV_DISCONN_TIMEOUT) {
+                reason = 0x08;
+            } else if(ev->reason == MGMT_DEV_DISCONN_LOCAL_HOST) {
+                reason = 0x16;
+            } else {
+                reason = 0x3E;
+            }
+            evt_param.disconnect.reason = reason;
+            conn_info_del_gatts(evt_param.conn_handle, ev->addr.bdaddr.b);
             uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_DISCONNET, &evt_param);
             break;
         }
@@ -175,7 +203,7 @@ uhos_ble_status_t uhos_ble_enable(void)
         LOGI("bluez daemon is already init");
         return UHOS_BLE_ERROR;
     }
-
+    conn_info_init();
     sem_init(&bluez_adapter_sem, 0, 0);
     bluez_gap_register_callback(stack_gap_cmd_callback, stack_gap_event_callback);
 
@@ -199,11 +227,11 @@ uhos_ble_status_t uhos_ble_disable(void)
         LOGI("bluez daemon isn't inited yet!");
         return UHOS_BLE_ERROR;
     }
-
+    
     pthread_kill(bluez_daemon_tid, SIGTERM);
     pthread_join(bluez_daemon_tid, NULL);
     bluez_daemon_tid = (pthread_t)0;
-
+    conn_info_deinit();
     LOGI("bluez daemon exit successfully");
 
     return UHOS_BLE_SUCCESS;
@@ -222,16 +250,19 @@ uhos_ble_status_t uhos_ble_rssi_start(uhos_u16 conn_handle)
 
 uhos_ble_status_t uhos_ble_rssi_get_detect(uhos_u16 conn_handle, uhos_s8 *rssi)
 {
+
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_rssi_get(uhos_u16 conn_handle, uhos_s8 *rssi)
 {
+
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_rssi_stop(uhos_u16 conn_handle)
 {
+    
     return UHOS_BLE_SUCCESS;
 }
 
