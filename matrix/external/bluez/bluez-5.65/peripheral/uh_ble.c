@@ -90,8 +90,11 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
         {
             const struct mgmt_ev_device_connected *ev = param;
             uhos_ble_gap_evt_param_t evt_param = {0x00};
-
-            uint8_t role = conn_info_get_role_by_addr(ev->addr.bdaddr.b);
+            
+            struct addr_info bdaddr;
+            memcpy(bdaddr.addr, ev->addr.bdaddr.b, 6);
+            bdaddr.addr_type = ev->addr.type;
+            uint8_t role = conn_info_get_role_by_addr(bdaddr);
             evt_param.conn_handle = conn_info_generate_handle(role);
             
             evt_param.connect.role = role;
@@ -112,15 +115,22 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
             evt_param.connect.conn_param.max_conn_interval = 0x00; // can't get this param;
             evt_param.connect.conn_param.min_conn_interval = 0x00; // can't get this param;
             evt_param.connect.conn_param.slave_latency = 0x00; // can't get this param;
-            conn_info_add_gatts(evt_param.conn_handle, evt_param.connect.peer_addr);
+
+            conn_info_add_gatts(evt_param.conn_handle, bdaddr);
             uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_CONNECTED, &evt_param);
             break;
         }   
         case MGMT_EV_DEVICE_DISCONNECTED:
         {
             const struct mgmt_ev_device_disconnected *ev = param;
+
             uhos_ble_gap_evt_param_t evt_param = {0x00};
-            evt_param.conn_handle = conn_info_get_handle_by_addr(ev->addr.bdaddr.b);
+
+            struct addr_info bdaddr;
+            memcpy(bdaddr.addr, ev->addr.bdaddr.b, 6);
+            bdaddr.addr_type = ev->addr.type;
+
+            evt_param.conn_handle = conn_info_get_handle_by_addr(bdaddr);
             uint8_t reason = 0;
             if (ev->reason == MGMT_DEV_DISCONN_REMOTE) {
                 reason = 0x13;
@@ -132,7 +142,7 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
                 reason = 0x3E;
             }
             evt_param.disconnect.reason = reason;
-            conn_info_del_gatts(evt_param.conn_handle, ev->addr.bdaddr.b);
+            conn_info_del_gatts(evt_param.conn_handle, bdaddr);
             uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_DISCONNET, &evt_param);
             break;
         }
@@ -140,7 +150,12 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
         {
             const struct mgmt_ev_new_conn_param * ev = param;
             uhos_ble_gap_evt_param_t evt_param = {0x00};
-            evt_param.conn_handle = 0x00; // reserved
+
+            struct addr_info bdaddr;
+            memcpy(bdaddr.addr, ev->addr.bdaddr.b, 6);
+            bdaddr.addr_type = ev->addr.type;
+
+            evt_param.conn_handle = conn_info_get_handle_by_addr(bdaddr);
             evt_param.update_conn.conn_param.conn_sup_timeout = ev->timeout;
             evt_param.update_conn.conn_param.max_conn_interval = ev->max_interval;
             evt_param.update_conn.conn_param.min_conn_interval = ev->min_interval;
@@ -250,13 +265,18 @@ uhos_ble_status_t uhos_ble_rssi_start(uhos_u16 conn_handle)
 
 uhos_ble_status_t uhos_ble_rssi_get_detect(uhos_u16 conn_handle, uhos_s8 *rssi)
 {
-
+    struct addr_info bdaddr;
+    conn_info_get_addr_by_handle(conn_handle, &bdaddr);
+    bluez_gap_get_conn_rssi(bdaddr.addr, bdaddr.addr_type, rssi);
+    return UHOS_BLE_SUCCESS;
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_rssi_get(uhos_u16 conn_handle, uhos_s8 *rssi)
 {
-
+    struct addr_info bdaddr;
+    conn_info_get_addr_by_handle(conn_handle, &bdaddr);
+    bluez_gap_get_conn_rssi(bdaddr.addr, bdaddr.addr_type, rssi);
     return UHOS_BLE_SUCCESS;
 }
 

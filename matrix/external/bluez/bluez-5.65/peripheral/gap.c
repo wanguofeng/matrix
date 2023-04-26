@@ -1300,17 +1300,11 @@ static void conn_info_rsp(uint8_t status, uint16_t len, const void *param,
 	return;
 }
 
-void bluez_gap_get_conn_rssi(uint16_t conn_handle, uint8_t *rssi)
+void bluez_gap_get_conn_rssi(uint8_t *peer_addr, uint8_t type, uint8_t *rssi)
 {
-	struct mgmt_rp_get_conn_info {
-		struct mgmt_addr_info addr;
-		int8_t rssi;
-		int8_t tx_power;
-		int8_t max_tx_power;
-	} __packed;
-
 	struct mgmt_cp_get_conn_info cp = {0x00};
-	
+	memcpy(cp.addr.bdaddr.b, peer_addr, 6);
+	cp.addr.type = type;
 	if (mgmt_send(mgmt, MGMT_OP_GET_CONN_INFO, mgmt_index, sizeof(cp), &cp,
 					conn_info_rsp, NULL, NULL) == 0) {
 		LOGE("Unable to send get_conn_info cmd");

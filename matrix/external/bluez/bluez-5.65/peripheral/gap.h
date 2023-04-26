@@ -33,3 +33,4 @@ void bluez_gap_set_adv_stop();
 void bluez_gap_set_adv_restart();
 void bluez_gap_set_scan_start(uint8_t scan_type, uint16_t scan_interval, uint16_t scan_window, uint16_t timeout);
 void bluez_gap_set_scan_stop();
+void bluez_gap_get_conn_rssi(uint8_t *peer_addr, uint8_t type, uint8_t *rssi);

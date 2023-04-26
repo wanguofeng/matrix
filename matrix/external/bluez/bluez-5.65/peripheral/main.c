@@ -14,6 +14,8 @@
 // 定义服务UUID
 #define BLE_SERVICE_UUID                     0x180D
 
+uhos_u16 conn_handle = 0x0000;
+
 void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param)
 {
 	switch(evt)
@@ -27,12 +29,14 @@ void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param
 																			    	evt->connect.peer_addr[3], evt->connect.peer_addr[2],
 																					evt->connect.peer_addr[1], evt->connect.peer_addr[0],
 																					evt->connect.type);
+			conn_handle = evt->conn_handle; 
 			break;
 		}
     	case UHOS_BLE_GAP_EVT_DISCONNET:
 		{
 			uhos_ble_gap_evt_param_t *evt = param;
 			LOGW("disconnected handle(%04x) reason(%02x)", evt->conn_handle, evt->disconnect.reason);
+			conn_handle = 0x0000;
 			break;
 		}
     	case UHOS_BLE_GAP_EVT_CONN_PARAM_UPDATED:
@@ -98,6 +102,11 @@ int main(int argc, char *argv[])
 	while(1)
 	{
 		sleep(10);
+
+		uhos_s8 rssi = 0;
+		if (conn_handle != 0x0000) {
+			uhos_ble_rssi_get(conn_handle, &rssi);
+		}		
 		// uhos_ble_gap_scan_start(UHOS_BLE_SCAN_TYPE_ACTIVE, scan_param);
 		// sleep(10);
 		// uhos_ble_gap_scan_stop();
