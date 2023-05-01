@@ -36,6 +36,8 @@
 #include "lib/bluetooth.h"
 #include "lib/mgmt.h"
 #include "peripheral/gap.h"
+#include "peripheral/gatt.h"
+
 #include "peripheral/uh_ble.h"
 #include "peripheral/conn_info.h" 
 
@@ -78,6 +80,8 @@ static void * bluez_daemon(void *arg)
     LOGI("bluez daemon exit_status(%d)", exit_status);
 
 	bluez_gap_uinit();
+    bluez_gatt_server_stop();
+
     pthread_exit(NULL);
 }
 
@@ -212,14 +216,17 @@ static void stack_gap_cmd_callback(uint16_t cmd, int8_t status, uint16_t len,
 uhos_ble_status_t uhos_ble_enable(void)
 {
     int ret = 0;
-    uint16_t hci_index = 0;
+    uint16_t hci_index = 1;
 
     if (bluez_daemon_tid != (pthread_t)0) {
         LOGI("bluez daemon is already init");
         return UHOS_BLE_ERROR;
     }
+
     conn_info_init();
+
     sem_init(&bluez_adapter_sem, 0, 0);
+
     bluez_gap_register_callback(stack_gap_cmd_callback, stack_gap_event_callback);
 
     ret = pthread_create(&bluez_daemon_tid, NULL, bluez_daemon, &hci_index);
@@ -228,11 +235,10 @@ uhos_ble_status_t uhos_ble_enable(void)
         sem_destroy(&bluez_adapter_sem);
         return UHOS_BLE_ERROR;
     }
-    
+
     sem_wait(&bluez_adapter_sem);
 
     LOGI("create bluez_daemon success!");
-
     return UHOS_BLE_SUCCESS;
 }
 
@@ -385,6 +391,7 @@ uhos_ble_status_t uhos_ble_gap_update_conn_params(
 uhos_ble_status_t uhos_ble_gap_disconnect(uhos_u16 conn_handle)
 {
     // mgmt disconncet;
+
     return UHOS_BLE_SUCCESS;
 }
 
@@ -392,19 +399,53 @@ uhos_ble_status_t uhos_ble_gap_connect(uhos_ble_gap_scan_param_t scan_param,
                                               uhos_ble_gap_connect_t conn_param)
 {
     // gatt client
+    
     return UHOS_BLE_SUCCESS;
 }
 
 /**************************************************************************************************/
-/* BLE GATT层server相关功能接口原型                                                               */
+/* BLE GATT层server相关功能接口原型                                                                 */
 /**************************************************************************************************/
+
+#define APP_MAX_SERVICE_NUM             10
+
+uhos_ble_gatts_cb_t g_uhos_ble_pal_gatts_user_cb = UHOS_NULL;
+
 uhos_ble_status_t uhos_ble_gatts_callback_register(uhos_ble_gatts_cb_t cb)
 {
+    g_uhos_ble_pal_gatts_user_cb = cb;
     return UHOS_BLE_SUCCESS;
+}
+
+static uhos_ble_status_t uhos_ble_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
+{
+    bluez_gatt_add_service(p_srv_db);
 }
 
 uhos_ble_status_t uhos_ble_gatts_service_set(uhos_ble_gatts_db_t *uhos_ble_service_database)
 {
+    uhos_ble_gatts_srv_db_t     *p_srv_db;
+    uhos_u8                     srv_num = 0;
+    uhos_ble_status_t           status;
+
+    srv_num = uhos_ble_service_database->srv_num;
+
+    if (srv_num > APP_MAX_SERVICE_NUM || srv_num == 0) {
+        LOGE("srv num limited");
+        return UHOS_BLE_ERROR;
+    }
+
+    for (int i = 0; i < srv_num; i ++) {
+        p_srv_db = &uhos_ble_service_database->p_srv_db[i];
+        status = uhos_ble_gatts_add_service(p_srv_db);
+        if (UHOS_BLE_SUCCESS != status) {
+            LOGW("ble add service failed, %d", i);
+            continue;
+        }
+    }
+
+    bluez_gatt_server_start();
+
     return UHOS_BLE_SUCCESS;
 }
 

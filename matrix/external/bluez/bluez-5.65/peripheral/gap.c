@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <semaphore.h>
+#include <time.h>
 
 #include "lib/bluetooth.h"
 #include "lib/mgmt.h"
@@ -201,30 +202,56 @@ static unsigned int mgmt_send_wrapper(struct mgmt *mgmt, uint16_t opcode, uint16
 	mgmt_send(mgmt, opcode, index, length, param, callback, user_data, destroy);
 }
 
+static const char *typestr(uint8_t type)
+{
+	static const char *str[] = { "BR/EDR", "LE Public", "LE Random" };
+
+	if (type <= BDADDR_LE_RANDOM)
+		return str[type];
+
+	return "(unknown)";
+}
+
 static void mgmt_sync_callback(uint8_t status, uint16_t len,
 					const void *param, void *user_data)
 {
 	struct send_sync * sync = (struct send_sync * )user_data;
 	sync->status = status;
+
+	if (sync->userdata != NULL)
+		memcpy(sync->userdata, param, len);
+	
 	LOGD("mgmt_send_sync_callback %s status(0x%02x)", opcode_str(sync->opcode), sync->status);
+	
 	sem_post(&sync->sem);
 }
 
-static unsigned int mgmt_send_sync(struct mgmt *mgmt, uint16_t opcode, uint16_t index,
-				uint16_t length, const void *param, mgmt_destroy_func_t destroy)
+static uint8_t mgmt_send_sync(struct mgmt *mgmt, uint16_t opcode, uint16_t index,
+				uint16_t length, const void *param, void *user_data, mgmt_destroy_func_t destroy)
 {
 	struct send_sync sync = {0x00};
 	sync.opcode = opcode;
+	sync.userdata = user_data;
+
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	// ts.tv_nsec += 50 * 1000000; // 50 ms
+	ts.tv_sec = 5;
 	sem_init(&sync.sem, 0, 0);
 
-	mgmt_send(mgmt, opcode, index, length, param, mgmt_sync_callback, &sync, destroy);
+	mgmt_send_wrapper(mgmt, opcode, index, length, param, mgmt_sync_callback, &sync, destroy);
 
-	LOGD("%s:%d wait sem", __FUNCTION__, __LINE__);
+	LOGD("wait sem");
+	
+	// int ret = sem_timedwait(&sync.sem, &ts);
 
-	sem_wait(&sync.sem);
+	int ret = sem_wait(&sync.sem);
+
+	LOGD("wait sem done ret = %d", ret);
+
 	sem_destroy(&sync.sem);
 
-	LOGD("mgmt_send_sync: %s(0x%04x) status(0x%02x)", opcode_str(opcode), opcode, sync.status);
+	return sync.status;
 }
 
 static bluez_gap_event_callback_func g_event_cb = NULL;
@@ -264,7 +291,7 @@ static void clear_long_term_keys(uint16_t index)
         memset(&cp, 0, sizeof(cp));
         cp.key_count = cpu_to_le16(0);
 
-        mgmt_send(mgmt, MGMT_OP_LOAD_LONG_TERM_KEYS, index,
+        mgmt_send_wrapper(mgmt, MGMT_OP_LOAD_LONG_TERM_KEYS, index,
                                         sizeof(cp), &cp, NULL, NULL, NULL);
 }
 
@@ -275,7 +302,7 @@ static void clear_identity_resolving_keys(uint16_t index)
         memset(&cp, 0, sizeof(cp));
         cp.irk_count = cpu_to_le16(0);
 
-        mgmt_send(mgmt, MGMT_OP_LOAD_IRKS, index,
+        mgmt_send_wrapper(mgmt, MGMT_OP_LOAD_IRKS, index,
                                         sizeof(cp), &cp, NULL, NULL, NULL);
 }
 
@@ -769,10 +796,10 @@ static void read_info_complete(uint8_t status, uint16_t len,
 	// mgmt_send_wrapper(mgmt, MGMT_OP_SET_LOCAL_NAME, index,
 	// 				260, dev_name, NULL, NULL, NULL);
 
-	gatt_set_static_address(static_addr);
-	gatt_set_device_name(dev_name, dev_name_len);
+	bluez_gatt_set_static_address(static_addr);
+	bluez_gatt_set_device_name(dev_name, dev_name_len);
 
-	gatt_server_start();
+	// bluez_gatt_server_start();
 
 	if (adv_features)	
 		mgmt_send_wrapper(mgmt, MGMT_OP_READ_ADV_FEATURES, mgmt_index, 0, NULL,
@@ -1006,7 +1033,7 @@ static void advertising_rm_adv(uint8_t instance)
 {
 	struct mgmt_cp_remove_advertising cmd = {0x00};
 	cmd.instance = instance;
-	mgmt_send_sync(mgmt, MGMT_OP_REMOVE_ADVERTISING, mgmt_index, sizeof(cmd), &cmd, NULL);
+	mgmt_send_sync(mgmt, MGMT_OP_REMOVE_ADVERTISING, mgmt_index, sizeof(cmd), &cmd, NULL, NULL);
 	g_adv_running = false;
 }
 
@@ -1041,21 +1068,11 @@ static void advertising_add_adv(uint8_t adv_type, uint8_t instance, uint8_t * ad
 	memcpy(cp->data + adv_len, scan_rsp, scan_rsp_len);
 
 	mgmt_send_sync(mgmt, MGMT_OP_ADD_ADVERTISING, mgmt_index,
-			sizeof(*cp) + adv_len + scan_rsp_len, buf, NULL);
+			sizeof(*cp) + adv_len + scan_rsp_len, buf, NULL, NULL);
 
 	g_adv_running = true;
 	
 	free(buf);
-}
-
-static const char *typestr(uint8_t type)
-{
-	static const char *str[] = { "BR/EDR", "LE Public", "LE Random" };
-
-	if (type <= BDADDR_LE_RANDOM)
-		return str[type];
-
-	return "(unknown)";
 }
 
 static char *eir_get_name(const uint8_t *eir, uint16_t eir_len)
@@ -1282,8 +1299,19 @@ void bluez_gap_get_address(uint8_t addr[6])
 static void conn_info_rsp(uint8_t status, uint16_t len, const void *param,
 							void *user_data)
 {
-	const struct mgmt_rp_get_conn_info *rp = param;
-	char addr[18];
+	const struct mgmt_rp_get_conn_info *rp = param;	char addr[18];
+
+	if (len == 0 && status != 0) {
+		LOGE("Get Conn Info failed, status 0x%02x (%s)",
+						status, mgmt_errstr(status));
+		return;
+	}
+
+	if (len < sizeof(*rp)) {
+		LOGE("Unexpected Get Conn Info len %u", len);
+		return;
+	}
+
 	ba2str(&rp->addr.bdaddr, addr);
 
 	if (status) {
@@ -1297,19 +1325,32 @@ static void conn_info_rsp(uint8_t status, uint16_t len, const void *param,
 				rp->rssi, rp->tx_power, rp->max_tx_power);
 	}
 
-	return;
 }
 
 void bluez_gap_get_conn_rssi(uint8_t *peer_addr, uint8_t type, uint8_t *rssi)
 {
 	struct mgmt_cp_get_conn_info cp = {0x00};
+	const struct mgmt_rp_get_conn_info *rp = NULL;
+	void * rsp_data = NULL;
+
 	memcpy(cp.addr.bdaddr.b, peer_addr, 6);
 	cp.addr.type = type;
-	if (mgmt_send(mgmt, MGMT_OP_GET_CONN_INFO, mgmt_index, sizeof(cp), &cp,
-					conn_info_rsp, NULL, NULL) == 0) {
-		LOGE("Unable to send get_conn_info cmd");
+	
+	rsp_data = malloc(256);
+
+	if (mgmt_send_sync(mgmt, MGMT_OP_GET_CONN_INFO, mgmt_index, sizeof(cp), &cp,
+					rsp_data, NULL)) {
+		LOGE("Send get_conn_info cmd fail");
+		free(rsp_data);
 		return;
 	}
+
+	rp = (const struct mgmt_rp_get_conn_info *)rsp_data; 
+
+	LOGD("[sync interface]\tRSSI %d\tTX power %d\tmaximum TX power %d\r\n\r\n",
+			rp->rssi, rp->tx_power, rp->max_tx_power);
+
+	free(rsp_data);
 }
 
 void bluez_gap_set_static_address(uint8_t addr[6])
@@ -1402,8 +1443,6 @@ void bluez_gap_uinit(void)
 	mgmt = NULL;
 
 	mgmt_index = MGMT_INDEX_NONE;
-
-	gatt_server_stop();
 
 	// hciemu_unref(hciemu_stack);
 	// hciemu_stack = NULL;

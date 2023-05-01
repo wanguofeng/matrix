@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
 
 	while(1)
 	{
-		sleep(10);
+		sleep(1);
 
 		uhos_s8 rssi = 0;
 		if (conn_handle != 0x0000) {

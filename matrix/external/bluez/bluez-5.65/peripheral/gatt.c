@@ -29,6 +29,7 @@
 #include "src/shared/gatt-server.h"
 #include "src/shared/gatt-client.h"
 #include "peripheral/gatt.h"
+#include "peripheral/uh_ble.h"
 
 #define CONFIG_LOG_TAG "Bluez_Stack"
 #include "peripheral/log.h"
@@ -38,6 +39,7 @@
 #define UUID_GAP 0x1800
 
 struct gatt_conn {
+	struct sockaddr_l2 addr;
 	struct bt_att *att;
 	struct bt_gatt_server *gatt;
 	struct bt_gatt_client *client;
@@ -52,12 +54,12 @@ static uint8_t static_addr[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 static uint8_t dev_name[20];
 static uint8_t dev_name_len = 0;
 
-void gatt_set_static_address(uint8_t addr[6])
+void bluez_gatt_set_static_address(uint8_t addr[6])
 {
 	memcpy(static_addr, addr, sizeof(static_addr));
 }
 
-void gatt_set_device_name(uint8_t name[20], uint8_t len)
+void bluez_gatt_set_device_name(uint8_t name[20], uint8_t len)
 {
 	memcpy(dev_name, name, sizeof(dev_name));
 	dev_name_len = len;
@@ -164,6 +166,11 @@ static void att_conn_callback(int fd, uint32_t events, void *user_data)
 		return;
 	}
 
+	LOGI("bdaddr(%02x:%02x:%02x:%02x:%02x:%02x) type(%02x)\n", addr.l2_bdaddr.b[5], addr.l2_bdaddr.b[4], addr.l2_bdaddr.b[3], 
+			addr.l2_bdaddr.b[2], addr.l2_bdaddr.b[1], addr.l2_bdaddr.b[0], 
+			addr.l2_bdaddr_type);
+
+
 	conn = gatt_conn_new(new_fd);
 	if (!conn) {
 		fprintf(stderr, "Failed to create GATT connection\n");
@@ -171,6 +178,9 @@ static void att_conn_callback(int fd, uint32_t events, void *user_data)
 		return;
 	}
 
+	conn->addr = addr;
+	memcpy(conn->addr.l2_bdaddr.b, addr.l2_bdaddr.b, 6);
+	
 	if (!queue_push_tail(conn_list, conn)) {
 		fprintf(stderr, "Failed to add GATT connection\n");
 		gatt_conn_destroy(conn);
@@ -204,17 +214,21 @@ static void gap_device_name_read(struct gatt_db_attribute *attrib,
 
 static void populate_gap_service(struct gatt_db *db)
 {
-	struct gatt_db_attribute *service;
+	struct gatt_db_attribute *service, * device_name;
 	bt_uuid_t uuid;
 
 	bt_uuid16_create(&uuid, UUID_GAP);
 	service = gatt_db_add_service(db, &uuid, true, 6);
 
+	LOGE("gap service handle = %04x", gatt_db_attribute_get_handle(service));
+
 	bt_uuid16_create(&uuid, GATT_CHARAC_DEVICE_NAME);
-	gatt_db_service_add_characteristic(service, &uuid,
+	device_name = gatt_db_service_add_characteristic(service, &uuid,
 					BT_ATT_PERM_READ,
 					BT_GATT_CHRC_PROP_READ,
 					gap_device_name_read, NULL, NULL);
+
+	LOGE("gap device_name handle = %04x", gatt_db_attribute_get_handle(device_name));
 
 	gatt_db_service_set_active(service, true);
 }
@@ -303,11 +317,13 @@ done:
 static void populate_gatt_service(struct gatt_db *db)
 {
 	bt_uuid_t uuid;
-	struct gatt_db_attribute *service, *svc_chngd;
+	struct gatt_db_attribute *service, *svc_chngd, *cccd;
 
 	/* Add the GATT service */
 	bt_uuid16_create(&uuid, 0x1801);
 	service = gatt_db_add_service(db, &uuid, true, 4);
+
+	LOGE("gatt service handle = %04x", gatt_db_attribute_get_handle(service));
 
 	bt_uuid16_create(&uuid, GATT_CHARAC_SERVICE_CHANGED);
 	svc_chngd = gatt_db_service_add_characteristic(service, &uuid,
@@ -317,29 +333,169 @@ static void populate_gatt_service(struct gatt_db *db)
 			NULL, NULL);
 
 	gatt_svc_chngd_handle = gatt_db_attribute_get_handle(svc_chngd);
-	LOGI("gatt_svc_chngd_handle = %04x", gatt_svc_chngd_handle);
+
+	LOGE("gatt_svc_chngd_handle = %04x", gatt_svc_chngd_handle);
 
 	bt_uuid16_create(&uuid, GATT_CLIENT_CHARAC_CFG_UUID);
-	gatt_db_service_add_descriptor(service, &uuid,
+	cccd = gatt_db_service_add_descriptor(service, &uuid,
 				BT_ATT_PERM_READ | BT_ATT_PERM_WRITE,
 				gatt_svc_chngd_ccc_read_cb,
 				gatt_svc_chngd_ccc_write_cb, NULL);
 
+	LOGE("cccd handle = %04x", gatt_db_attribute_get_handle(cccd));
+
 	gatt_db_service_set_active(service, true);
 }
 
-// static void populate_devinfo_service(struct gatt_db *db)
-// {
-// 	struct gatt_db_attribute *service;
-// 	bt_uuid_t uuid;
+static void gatt_character_read_cb(struct gatt_db_attribute *attrib,
+					unsigned int id, uint16_t offset,
+					uint8_t opcode, struct bt_att *att,
+					void *user_data)
+{
+	LOGI("Service Changed Read called\n");
 
-// 	bt_uuid16_create(&uuid, 0x180a);
-// 	service = gatt_db_add_service(db, &uuid, true, 17);
+	gatt_db_attribute_read_result(attrib, id, 0, NULL, 0);
+}
 
-// 	gatt_db_service_set_active(service, true);
-// }
+static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
+					unsigned int id, uint16_t offset,
+					const uint8_t *value, size_t len,
+					uint8_t opcode, struct bt_att *att,
+					void *user_data)
+{
+	uint8_t ecode = 0;
 
-void gatt_server_start(void)
+	if (!value || len != 1) {
+		ecode = BT_ATT_ERROR_INVALID_ATTRIBUTE_VALUE_LEN;
+		goto done;
+	}
+
+	if (offset) {
+		ecode = BT_ATT_ERROR_INVALID_OFFSET;
+		goto done;
+	}
+
+done:
+	gatt_db_attribute_write_result(attrib, id, ecode);
+}
+
+void bluez_gatt_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
+{
+	if (gatt_db == NULL) {
+		LOGE("gatt_db is null");
+		return;
+	}
+
+	if (p_srv_db == NULL) {
+		LOGE("p_srv_db is null");
+		return;
+	}
+
+	if (p_srv_db->char_num == 0) {
+		LOGE("p_srv_db->char_num is zero");
+		return;
+	}
+
+	bt_uuid_t uuid;
+	struct gatt_db_attribute *service, *character, *cccd;
+
+	if (p_srv_db->srv_uuid.type == UHOS_BLE_UUID_TYPE_16) {
+		bt_uuid16_create(&uuid, p_srv_db->srv_uuid.uuid16);
+	} else {
+		uint128_t u128;
+		bswap_128(p_srv_db->srv_uuid.uuid128, &u128);
+		bt_uuid128_create(&uuid, u128);
+	}
+
+	if (p_srv_db->srv_type == UHOS_BLE_PRIMARY_SERVICE) {
+		service = gatt_db_add_service(gatt_db, &uuid, true, p_srv_db->char_num * 4);
+	} else {
+		service = gatt_db_add_service(gatt_db, &uuid, false, p_srv_db->char_num * 4);
+	}
+
+	p_srv_db->srv_handle = gatt_db_attribute_get_handle(service);
+
+	LOGE("gatt service handle = %04x", p_srv_db->srv_handle);
+
+	for (int i = 0; i < p_srv_db->char_num; i ++) {
+
+		uhos_ble_gatts_char_db_t *char_db = &p_srv_db->p_char_db[i];
+
+		if (char_db->char_uuid.type == UHOS_BLE_UUID_TYPE_16) {
+			bt_uuid16_create(&uuid, char_db->char_uuid.uuid16);
+		} else {
+			uint128_t u128;
+			bswap_128(char_db->char_uuid.uuid128, &u128);
+			bt_uuid128_create(&uuid, u128);
+		}
+
+		uint32_t permission = 0;
+		uint8_t properties = 0;
+		gatt_db_read_t read_callback = NULL;
+		gatt_db_write_t write_callback = NULL;
+		bool is_cccd_exit = false;
+
+		if (char_db->char_property && UHOS_BLE_CHAR_PROP_BROADCAST)
+			properties |= BT_GATT_CHRC_PROP_BROADCAST;
+
+		if (char_db->char_property && UHOS_BLE_CHAR_PROP_READ) {
+			properties |= BT_GATT_CHRC_PROP_READ;
+			permission |= BT_ATT_PERM_READ;
+			read_callback = gatt_character_read_cb;
+		}
+
+		if (char_db->char_property && UHOS_BLE_CHAR_PROP_WRITE_WITHOUT_RESP) {
+			properties |= BT_GATT_CHRC_PROP_WRITE_WITHOUT_RESP;
+			permission |= BT_ATT_PERM_WRITE;
+			write_callback = gatt_character_write_cb;
+		}
+
+		if (char_db->char_property && UHOS_BLE_CHAR_PROP_WRITE) {
+			properties |= BT_GATT_CHRC_PROP_WRITE;
+			permission |= BT_ATT_PERM_WRITE;
+			write_callback = gatt_character_write_cb;
+		}
+
+		if (char_db->char_property && UHOS_BLE_CHAR_PROP_NOTIFY) {
+			properties |= BT_GATT_CHRC_PROP_NOTIFY;
+			is_cccd_exit = true;
+		}
+
+		if (char_db->char_property && UHOS_BLE_CHAR_PROP_INDICATE) {
+			properties |= BT_GATT_CHRC_PROP_INDICATE;
+			is_cccd_exit = true;
+		}
+
+		if (char_db->char_property && UHOS_BLE_CHAR_PROP_AUTH_SIGNED_WRITE)
+			properties |= BT_GATT_CHRC_PROP_AUTH;
+
+		if (char_db->char_property && UHOS_BLE_CHAR_PROP_EXTENDED_PROPERTIES)
+			properties |= BT_GATT_CHRC_PROP_EXT_PROP;
+
+		character = gatt_db_service_add_characteristic(service, &uuid,
+					permission,
+					properties,
+					read_callback,
+					write_callback, NULL);
+
+		char_db->char_value_handle = gatt_db_attribute_get_handle(character);
+
+		LOGD("char_value_handle = %04x", char_db->char_value_handle);
+
+		if (is_cccd_exit) {
+			bt_uuid16_create(&uuid, GATT_CLIENT_CHARAC_CFG_UUID);
+			cccd = gatt_db_service_add_descriptor(service, &uuid,
+								BT_ATT_PERM_READ | BT_ATT_PERM_WRITE,
+								gatt_svc_chngd_ccc_read_cb,
+								gatt_svc_chngd_ccc_write_cb, NULL);
+
+			LOGE("cccd handle = %04x", gatt_db_attribute_get_handle(cccd));
+		}
+		gatt_db_service_set_active(service, true);
+	}
+}
+
+void bluez_gatt_server_start(void)
 {
 	struct sockaddr_l2 addr;
 
@@ -393,25 +549,28 @@ void gatt_server_start(void)
 		return;
 	}
 
-	populate_gap_service(gatt_db);
-	// populate_devinfo_service(gatt_db);
-	populate_gatt_service(gatt_db);
-
 	gatt_cache = gatt_db_new();
-
 	conn_list = queue_new();
 	if (!conn_list) {
+		LOGE("create conn_list failed");
 		gatt_db_unref(gatt_db);
 		gatt_db = NULL;
-		close(att_fd);
-		att_fd = -1;
 		return;
 	}
+
+#if 1
+	if (gatt_db != NULL) {
+		// populate_devinfo_service(gatt_db);
+		populate_gap_service(gatt_db);
+		populate_gatt_service(gatt_db);
+		// populate_app_service(gatt_db);
+	}
+#endif
 
 	mainloop_add_fd(att_fd, EPOLLIN, att_conn_callback, NULL, NULL);
 }
 
-void gatt_server_stop(void)
+void bluez_gatt_server_stop(void)
 {
 	if (att_fd < 0)
 		return;

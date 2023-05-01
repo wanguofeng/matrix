@@ -10,8 +10,11 @@
 
 #include <stdint.h>
 
-void gatt_set_static_address(uint8_t addr[6]);
-void gatt_set_device_name(uint8_t name[20], uint8_t len);
+#include "peripheral/uh_ble.h" 
 
-void gatt_server_start(void);
-void gatt_server_stop(void);
+void bluez_gatt_set_static_address(uint8_t addr[6]);
+void bluez_gatt_set_device_name(uint8_t name[20], uint8_t len);
+
+void bluez_gatt_server_start(void);
+void bluez_gatt_server_stop(void);
+void bluez_gatt_add_service(uhos_ble_gatts_srv_db_t *p_srv_db);
