@@ -96,20 +96,21 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
             uhos_ble_gap_evt_param_t evt_param = {0x00};
             
             struct addr_info bdaddr;
+
             memcpy(bdaddr.addr, ev->addr.bdaddr.b, 6);
             bdaddr.addr_type = ev->addr.type;
             uint8_t role = conn_info_get_role_by_addr(bdaddr);
             evt_param.conn_handle = conn_info_generate_handle(role);
-            
+
             evt_param.connect.role = role;
+
+            LOGE("type = %02x", ev->addr.type);
 
             if (ev->addr.type == BDADDR_LE_PUBLIC) {
                 evt_param.connect.type = UHOS_BLE_ADDRESS_TYPE_PUBLIC;
-            }
-            else if (ev->addr.type == BDADDR_LE_RANDOM) {
+            } else if (ev->addr.type == BDADDR_LE_RANDOM) {
                 evt_param.connect.type = UHOS_BLE_ADDRESS_TYPE_RANDOM;
-            }
-            else {
+            } else {
                 evt_param.connect.type = 0x02; // unknow;
             }
 
@@ -201,13 +202,35 @@ static void stack_gap_cmd_callback(uint16_t cmd, int8_t status, uint16_t len,
     switch(cmd)
     {
         case MGMT_OP_READ_DEF_SYSTEM_CONFIG:
+        {
             LOGI("receive MGMT_OP_READ_DEF_SYSTEM_CONFIG status(%d)", status);
             sem_post(&bluez_adapter_sem);
             break;
+        }
+
         case MGMT_OP_SET_POWERED:
+        {
             LOGI("receive MGMT_OP_SET_POWERED status(%d)", status);
-            
             break;
+        }
+            
+        case MGMT_OP_DISCONNECT:
+        {
+            uhos_ble_gap_evt_param_t evt_param = {0x00};
+            const struct mgmt_rp_disconnect *rp = param;
+
+            struct addr_info bdaddr;
+            memcpy(bdaddr.addr, rp->addr.bdaddr.b, 6);
+            bdaddr.addr_type = rp->addr.type;
+
+            evt_param.conn_handle = conn_info_get_handle_by_addr(bdaddr);
+            uint8_t reason = 0x16;
+            evt_param.disconnect.reason = reason;
+            conn_info_del_gatts(evt_param.conn_handle, bdaddr);
+            uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_DISCONNET, &evt_param);
+            break;
+        }
+
         default:
             break;
     }
@@ -408,20 +431,12 @@ uhos_ble_status_t uhos_ble_gap_disconnect(uhos_u16 conn_handle)
     bdaddr_t bdaddr;
     uint8_t bdaddr_type;
     struct addr_info info;
-    
-    conn_info_get_addr_by_handle(conn_handle, &info);
-    
-    if (info.addr_type == UHOS_BLE_ADDRESS_TYPE_PUBLIC) {
-        bdaddr_type = BDADDR_LE_PUBLIC;
-    }
-    else if (info.addr_type == UHOS_BLE_ADDRESS_TYPE_RANDOM) {
-        bdaddr_type = BDADDR_LE_RANDOM;
-    }
 
+    conn_info_get_addr_by_handle(conn_handle, &info);
+    LOGW("type = %02x", info.addr_type);
     memcpy(bdaddr.b, info.addr, 6);
 
-    bluez_gap_disconnect(&bdaddr, bdaddr_type);
-
+    bluez_gap_disconnect(&bdaddr, info.addr_type);
     return UHOS_BLE_SUCCESS;
 }
 

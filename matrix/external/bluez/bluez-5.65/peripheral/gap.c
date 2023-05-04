@@ -582,18 +582,26 @@ static void set_sysconfig_item(uint16_t type, uint8_t length, uint8_t value[])
 		mgmt_tlv_list_free(tlv_list);
 }
 
+uint8_t le16(uint8_t data)
+{
+	return (data * 16 / 10);
+}
+
 static void set_sysconfig_adv_param(uint16_t adv_max_interval, uint16_t adv_min_interval)
 {
 	char value[256] = {0x00};
 
+	LOGI("adv_interval(%04x)", adv_max_interval);
 	/* set adv max interval */
-	value[0] = 0x00;
-	value[1] = 0x01;
+	value[0] = le16(adv_max_interval);
+	value[1] = le16((adv_max_interval >> 8));
+
+	LOGI("value[0](%x) value[1](%x)", value[0], value[1]);
 	set_sysconfig_item(0x000a, 0x02, value);
 
 	/* set adv min interval */
-	value[0] = 0x00;
-	value[1] = 0x01;
+	value[0] = le16(adv_min_interval);
+	value[1] = le16((adv_min_interval >> 8));
 	set_sysconfig_item(0x000b, 0x02, value);
 }
 
@@ -799,7 +807,7 @@ static void read_info_complete(uint8_t status, uint16_t len,
 	bluez_gatts_set_static_address(static_addr);
 	bluez_gatts_set_device_name(dev_name, dev_name_len);
 
-	// bluez_gatts_server_start();
+	bluez_gatts_server_start();
 
 	if (adv_features)	
 		mgmt_send_wrapper(mgmt, MGMT_OP_READ_ADV_FEATURES, mgmt_index, 0, NULL,
@@ -1296,6 +1304,32 @@ void bluez_gap_get_address(uint8_t addr[6])
 	memcpy(addr, static_addr, sizeof(static_addr));
 }
 
+static void disconnect_rsp(uint8_t status, uint16_t len, const void *param,
+							void *user_data)
+{
+	const struct mgmt_rp_disconnect *rp = param;
+	char addr[18];
+
+	if (len == 0 && status != 0) {
+		LOGE("Disconnect failed with status 0x%02x (%s)",
+						status, mgmt_errstr(status));
+	}
+
+	if (len != sizeof(*rp)) {
+		LOGE("Invalid disconnect response length (%u)", len);
+	}
+
+	ba2str(&rp->addr.bdaddr, addr);
+
+	if (status == 0)
+		LOGD("%s disconnected", addr);
+	else
+		LOGE("Disconnecting %s failed with status 0x%02x (%s)",
+				addr, status, mgmt_errstr(status));
+
+	cmd_callback(MGMT_OP_DISCONNECT, status, len, param, user_data);
+}
+
 void bluez_gap_disconnect(const bdaddr_t *bdaddr, uint8_t bdaddr_type)
 {
 	struct mgmt_cp_disconnect cp;
@@ -1304,9 +1338,14 @@ void bluez_gap_disconnect(const bdaddr_t *bdaddr, uint8_t bdaddr_type)
 	bacpy(&cp.addr.bdaddr, bdaddr);
 	cp.addr.type = bdaddr_type;
 
+	char addr[18], *name;
+
+	ba2str(bdaddr, addr);
+	LOGW("type(%02x) bdaddr(%s)", bdaddr_type, addr);
+
 	mgmt_send_wrapper(mgmt, MGMT_OP_DISCONNECT,
 						mgmt_index, sizeof(cp), &cp,
-						NULL, NULL, NULL);
+						disconnect_rsp, NULL, NULL);
 }
 
 static void conn_info_rsp(uint8_t status, uint16_t len, const void *param,

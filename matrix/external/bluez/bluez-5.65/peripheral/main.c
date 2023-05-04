@@ -15,6 +15,8 @@
 #define BLE_SERVICE_UUID                     0x180D
 
 uhos_u16 conn_handle = 0x0000;
+uhos_ble_addr_t           peer_addr;
+uhos_ble_addr_type_t      type;
 
 void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param)
 {
@@ -29,6 +31,8 @@ void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param
 																			    	evt->connect.peer_addr[3], evt->connect.peer_addr[2],
 																					evt->connect.peer_addr[1], evt->connect.peer_addr[0],
 																					evt->connect.type);
+			type = evt->connect.type;
+			memcpy(peer_addr, evt->connect.peer_addr, 6);
 			conn_handle = evt->conn_handle; 
 			break;
 		}
@@ -84,8 +88,8 @@ int main(int argc, char *argv[])
 	uhos_ble_gap_adv_data_set(ble_adv_data, sizeof(ble_adv_data), ble_scan_rsp, sizeof(ble_scan_rsp));
 
 	uhos_ble_gap_adv_param_t param = {
-		.adv_interval_max = 0x100,
-		.adv_interval_min = 0x100,
+		.adv_interval_max = 100,
+		.adv_interval_min = 100,
 		.adv_type = UHOS_BLE_ADV_TYPE_CONNECTABLE_UNDIRECTED,
 	};
 
@@ -99,13 +103,21 @@ int main(int argc, char *argv[])
 
 	uhos_ble_gap_callback_register(uh_ble_gap_callback);
 
+	uint16_t count = 0;
 	while(1)
 	{
 		sleep(1);
 
 		uhos_s8 rssi = 0;
 		if (conn_handle != 0x0000) {
+			count ++;
+			LOGI("count = %d", count);
 			uhos_ble_rssi_get(conn_handle, &rssi);
+
+			if (count == 10) {
+				uhos_ble_gap_disconnect(conn_handle);
+				count = 0;
+			}
 		}		
 		// uhos_ble_gap_scan_start(UHOS_BLE_SCAN_TYPE_ACTIVE, scan_param);
 		// sleep(10);
