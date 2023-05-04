@@ -49,7 +49,7 @@
 */
 
 static uhos_ble_status_t uhos_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param);
-
+static uhos_ble_status_t uhos_ble_gatts_callback(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_evt_param_t *param);
 static pthread_t bluez_daemon_tid = (pthread_t)0;
 static sem_t bluez_adapter_sem;
 
@@ -80,7 +80,7 @@ static void * bluez_daemon(void *arg)
     LOGI("bluez daemon exit_status(%d)", exit_status);
 
 	bluez_gap_uinit();
-    bluez_gatt_server_stop();
+    bluez_gatts_server_stop();
 
     pthread_exit(NULL);
 }
@@ -103,7 +103,7 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
             
             evt_param.connect.role = role;
 
-            if (ev->addr.type == UHOS_BLE_ADDRESS_TYPE_PUBLIC) {
+            if (ev->addr.type == BDADDR_LE_PUBLIC) {
                 evt_param.connect.type = UHOS_BLE_ADDRESS_TYPE_PUBLIC;
             }
             else if (ev->addr.type == BDADDR_LE_RANDOM) {
@@ -213,6 +213,18 @@ static void stack_gap_cmd_callback(uint16_t cmd, int8_t status, uint16_t len,
     }
 }
 
+static void stack_gatt_server_callback(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_evt_param_t *param, uint8_t addr[6], uint8_t addr_type)
+{
+    struct addr_info bdaddr;
+    bdaddr.addr_type = addr_type;
+    memcpy(bdaddr.addr, addr, 6);
+
+    param->conn_handle = conn_info_get_handle_by_addr(bdaddr);
+    LOGD("%s conn_handle = %04x", __FUNCTION__, param->conn_handle);
+
+    uhos_ble_gatts_callback(evt, param);
+}
+
 uhos_ble_status_t uhos_ble_enable(void)
 {
     int ret = 0;
@@ -228,6 +240,8 @@ uhos_ble_status_t uhos_ble_enable(void)
     sem_init(&bluez_adapter_sem, 0, 0);
 
     bluez_gap_register_callback(stack_gap_cmd_callback, stack_gap_event_callback);
+
+    bluez_gatts_register_callback(stack_gatt_server_callback);
 
     ret = pthread_create(&bluez_daemon_tid, NULL, bluez_daemon, &hci_index);
     if (ret != 0) {
@@ -391,6 +405,22 @@ uhos_ble_status_t uhos_ble_gap_update_conn_params(
 uhos_ble_status_t uhos_ble_gap_disconnect(uhos_u16 conn_handle)
 {
     // mgmt disconncet;
+    bdaddr_t bdaddr;
+    uint8_t bdaddr_type;
+    struct addr_info info;
+    
+    conn_info_get_addr_by_handle(conn_handle, &info);
+    
+    if (info.addr_type == UHOS_BLE_ADDRESS_TYPE_PUBLIC) {
+        bdaddr_type = BDADDR_LE_PUBLIC;
+    }
+    else if (info.addr_type == UHOS_BLE_ADDRESS_TYPE_RANDOM) {
+        bdaddr_type = BDADDR_LE_RANDOM;
+    }
+
+    memcpy(bdaddr.b, info.addr, 6);
+
+    bluez_gap_disconnect(&bdaddr, bdaddr_type);
 
     return UHOS_BLE_SUCCESS;
 }
@@ -407,19 +437,42 @@ uhos_ble_status_t uhos_ble_gap_connect(uhos_ble_gap_scan_param_t scan_param,
 /* BLE GATT层server相关功能接口原型                                                                 */
 /**************************************************************************************************/
 
-#define APP_MAX_SERVICE_NUM             10
+#define APP_MAX_SERVICE_NUM                     10
+#define UHOS_BLE_GATTS_MAX_USERS                4
 
-uhos_ble_gatts_cb_t g_uhos_ble_pal_gatts_user_cb = UHOS_NULL;
+uhos_ble_gatts_cb_t     g_uhos_ble_pal_gatts_cb_table[UHOS_BLE_GATTS_MAX_USERS] = { NULL };
+uhos_u8                 g_gatts_users = 0;
+
+static uhos_ble_status_t uhos_ble_gatts_callback(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_evt_param_t *param)
+{
+    int i = 0;
+    uhos_ble_gatts_cb_t cb = UHOS_NULL;
+    while (i < g_gatts_users) {
+        if (g_uhos_ble_pal_gatts_cb_table[i] != UHOS_NULL) {
+            cb = g_uhos_ble_pal_gatts_cb_table[i];
+            cb(evt, param);
+        }
+        i++;
+    }
+}
 
 uhos_ble_status_t uhos_ble_gatts_callback_register(uhos_ble_gatts_cb_t cb)
 {
-    g_uhos_ble_pal_gatts_user_cb = cb;
-    return UHOS_BLE_SUCCESS;
+    int i = 0;
+    while (i < UHOS_BLE_GATTS_MAX_USERS) {
+        if (g_uhos_ble_pal_gatts_cb_table[i] == UHOS_NULL) {
+            g_uhos_ble_pal_gatts_cb_table[i] = cb;
+            g_gatts_users ++;
+            return UHOS_BLE_SUCCESS;
+        }
+        i++;
+   }
+   return UHOS_BLE_ERROR;  // full
 }
 
 static uhos_ble_status_t uhos_ble_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 {
-    bluez_gatt_add_service(p_srv_db);
+    bluez_gatts_add_service(p_srv_db);
 }
 
 uhos_ble_status_t uhos_ble_gatts_service_set(uhos_ble_gatts_db_t *uhos_ble_service_database)
@@ -435,6 +488,8 @@ uhos_ble_status_t uhos_ble_gatts_service_set(uhos_ble_gatts_db_t *uhos_ble_servi
         return UHOS_BLE_ERROR;
     }
 
+    bluez_gatts_server_start();
+
     for (int i = 0; i < srv_num; i ++) {
         p_srv_db = &uhos_ble_service_database->p_srv_db[i];
         status = uhos_ble_gatts_add_service(p_srv_db);
@@ -443,8 +498,6 @@ uhos_ble_status_t uhos_ble_gatts_service_set(uhos_ble_gatts_db_t *uhos_ble_servi
             continue;
         }
     }
-
-    bluez_gatt_server_start();
 
     return UHOS_BLE_SUCCESS;
 }
@@ -457,16 +510,24 @@ uhos_ble_status_t uhos_ble_gatts_notify_or_indicate(
     uhos_u8 *p_value,
     uhos_u16 len)
 {
+    if (offset == 0) {
+        bluez_gatts_send_notification(char_value_handle, p_value, len);
+    } else {
+        bluez_gatts_send_indication(char_value_handle, p_value, len);
+    }
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gatts_mtu_default_set(uhos_u16 mtu)
 {
+    // bt_gatt_exchange_mtu(context->att, mtu, NULL, NULL, NULL);
+    bluez_gatts_set_mtu(mtu);
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gatts_mtu_get(uhos_u16 conn_handle, uhos_u16 *mtu_size)
 {
+    bluez_gatts_get_mtu(mtu_size);
     return UHOS_BLE_SUCCESS;
 }
 

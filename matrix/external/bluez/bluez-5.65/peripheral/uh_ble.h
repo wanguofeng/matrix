@@ -320,6 +320,7 @@ typedef struct uhos_ble_gatts_read
 typedef struct uhos_ble_gatts_evt_param
 {
     uhos_u16 conn_handle;                               //<! 连接句柄
+    uhos_u32 cccd;                                      //<! cccd值
     union
     {
         uhos_ble_gatts_write_t write;                   //<! 写数据

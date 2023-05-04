@@ -796,10 +796,10 @@ static void read_info_complete(uint8_t status, uint16_t len,
 	// mgmt_send_wrapper(mgmt, MGMT_OP_SET_LOCAL_NAME, index,
 	// 				260, dev_name, NULL, NULL, NULL);
 
-	bluez_gatt_set_static_address(static_addr);
-	bluez_gatt_set_device_name(dev_name, dev_name_len);
+	bluez_gatts_set_static_address(static_addr);
+	bluez_gatts_set_device_name(dev_name, dev_name_len);
 
-	// bluez_gatt_server_start();
+	// bluez_gatts_server_start();
 
 	if (adv_features)	
 		mgmt_send_wrapper(mgmt, MGMT_OP_READ_ADV_FEATURES, mgmt_index, 0, NULL,
@@ -1294,6 +1294,19 @@ void bluez_gap_get_address(uint8_t addr[6])
 	if (mgmt_index == MGMT_INDEX_NONE)
 		return;
 	memcpy(addr, static_addr, sizeof(static_addr));
+}
+
+void bluez_gap_disconnect(const bdaddr_t *bdaddr, uint8_t bdaddr_type)
+{
+	struct mgmt_cp_disconnect cp;
+
+	memset(&cp, 0, sizeof(cp));
+	bacpy(&cp.addr.bdaddr, bdaddr);
+	cp.addr.type = bdaddr_type;
+
+	mgmt_send_wrapper(mgmt, MGMT_OP_DISCONNECT,
+						mgmt_index, sizeof(cp), &cp,
+						NULL, NULL, NULL);
 }
 
 static void conn_info_rsp(uint8_t status, uint16_t len, const void *param,

@@ -28,6 +28,8 @@
 #include "src/shared/gatt-db.h"
 #include "src/shared/gatt-server.h"
 #include "src/shared/gatt-client.h"
+#include "src/shared/gatt-helpers.h"
+
 #include "peripheral/gatt.h"
 #include "peripheral/uh_ble.h"
 
@@ -54,12 +56,25 @@ static uint8_t static_addr[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 static uint8_t dev_name[20];
 static uint8_t dev_name_len = 0;
 
-void bluez_gatt_set_static_address(uint8_t addr[6])
+static bluez_gatts_event_callback_func g_gatts_cb;
+
+static void gatts_callback(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_evt_param_t *param, uint8_t addr[6], uint8_t addr_type)
+{
+	if (g_gatts_cb != NULL)
+		g_gatts_cb(evt, param, addr, addr_type);
+}
+
+void bluez_gatts_register_callback(bluez_gatts_event_callback_func func)
+{
+	g_gatts_cb = func;
+}
+
+void bluez_gatts_set_static_address(uint8_t addr[6])
 {
 	memcpy(static_addr, addr, sizeof(static_addr));
 }
 
-void bluez_gatt_set_device_name(uint8_t name[20], uint8_t len)
+void bluez_gatts_set_device_name(uint8_t name[20], uint8_t len)
 {
 	memcpy(dev_name, name, sizeof(dev_name));
 	dev_name_len = len;
@@ -129,7 +144,7 @@ static struct gatt_conn *gatt_conn_new(int fd)
 	}
 
 	conn->client = bt_gatt_client_new(gatt_cache, conn->att, mtu, 0);
-	if (!conn->gatt) {
+	if (!conn->client) {
 		fprintf(stderr, "Failed to create GATT client\n");
 		bt_gatt_server_unref(conn->gatt);
 		bt_att_unref(conn->att);
@@ -297,6 +312,54 @@ done:
 	gatt_db_attribute_write_result(attrib, id, error);
 }
 
+static void gatt_descriptor_ccc_write_cb(struct gatt_db_attribute *attrib,
+					unsigned int id, uint16_t offset,
+					const uint8_t *value, size_t len,
+					uint8_t opcode, struct bt_att *att,
+					void *user_data)
+{
+	struct server *server = user_data;
+	uint8_t error = 0;
+
+	LOGI("CCCD Write called\n");
+
+	if (!value || len != 2) {
+		error = BT_ATT_ERROR_INVALID_ATTRIBUTE_VALUE_LEN;
+		goto done;
+	}
+
+	if (offset) {
+		error = BT_ATT_ERROR_INVALID_OFFSET;
+		goto done;
+	}
+
+	if (value[0] == 0x00)
+		svc_chngd_enabled = false;
+	else if (value[0] == 0x02)
+		svc_chngd_enabled = true;
+	else
+		error = 0x80;
+
+	uint16_t handle = gatt_db_attribute_get_handle(attrib);
+	LOGD("%s handle = %04x", __FUNCTION__, handle);
+
+	uhos_ble_gatts_evt_t evt = UHOS_BLE_GATTS_EVT_CCCD_UPDATE;
+
+	uhos_ble_gatts_evt_param_t *param = malloc(sizeof(uhos_ble_gatts_evt_param_t));
+	param->write.value_handle = handle;
+	param->write.len = len;
+	param->write.offset = offset;
+	param->write.data = value;
+	param->cccd = (uint32_t)*value;
+
+	struct gatt_conn *conn = queue_peek_head(conn_list);
+
+	gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
+
+done:
+	gatt_db_attribute_write_result(attrib, id, error);
+	free(param);
+}
 // static void conf_cb(void *user_data)
 // {
 // 	LOGI("Received confirmation\n");
@@ -354,7 +417,26 @@ static void gatt_character_read_cb(struct gatt_db_attribute *attrib,
 {
 	LOGI("Service Changed Read called\n");
 
-	gatt_db_attribute_read_result(attrib, id, 0, NULL, 0);
+	uint16_t handle = gatt_db_attribute_get_handle(attrib);
+	LOGD("%s handle = %04x", __FUNCTION__, handle);
+
+	uhos_ble_gatts_evt_t evt = UHOS_BLE_GATTS_EVT_READ;
+	uhos_ble_gatts_evt_param_t *param = malloc(sizeof(uhos_ble_gatts_evt_param_t));
+
+	uint8_t *value = NULL;
+	uint16_t len = 0;
+
+	param->read.value_handle = handle;
+	param->read.offset = offset;
+	param->read.data = &value;
+	param->read.len = &len;
+
+	struct gatt_conn *conn = queue_peek_head(conn_list);
+
+	gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
+
+	gatt_db_attribute_read_result(attrib, id, 0, value, len);
+	free(param);
 }
 
 static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
@@ -375,11 +457,59 @@ static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
 		goto done;
 	}
 
+	uint16_t handle = gatt_db_attribute_get_handle(attrib);
+	LOGD("%s handle = %04x", __FUNCTION__, handle);
+
+	uhos_ble_gatts_evt_t evt = UHOS_BLE_GATTS_EVT_WRITE;
+
+	uhos_ble_gatts_evt_param_t *param = malloc(sizeof(uhos_ble_gatts_evt_param_t));
+	param->write.value_handle = handle;
+	param->write.len = len;
+	param->write.offset = offset;
+	param->write.data = value;
+
+	struct gatt_conn *conn = queue_peek_head(conn_list);
+
+	gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
+
 done:
 	gatt_db_attribute_write_result(attrib, id, ecode);
+	free(param);
 }
 
-void bluez_gatt_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
+void bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, uint16_t length)
+{
+	struct gatt_conn *conn = queue_peek_head(conn_list);
+
+	bt_gatt_server_send_notification(conn->gatt,
+					char_handle, value,
+					length, true);
+}
+
+void bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uint16_t length)
+{
+	struct gatt_conn *conn = queue_peek_head(conn_list);
+	bt_gatt_server_send_indication(conn->gatt,
+					char_handle, value,
+					length,
+					NULL, NULL, NULL);
+}
+
+void bluez_gatts_set_mtu(uint16_t mtu)
+{
+	struct gatt_conn *conn = queue_peek_head(conn_list);
+	if (conn != NULL)
+		bt_gatt_exchange_mtu(conn->att, mtu, NULL, NULL, NULL);
+}
+
+void bluez_gatts_get_mtu(uint16_t *mtu)
+{
+	struct gatt_conn *conn = queue_peek_head(conn_list);
+	if (conn != NULL)
+		*mtu = bt_gatt_server_get_mtu(conn->gatt);
+}
+
+void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 {
 	if (gatt_db == NULL) {
 		LOGE("gatt_db is null");
@@ -408,9 +538,9 @@ void bluez_gatt_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 	}
 
 	if (p_srv_db->srv_type == UHOS_BLE_PRIMARY_SERVICE) {
-		service = gatt_db_add_service(gatt_db, &uuid, true, p_srv_db->char_num * 4);
+		service = gatt_db_add_service(gatt_db, &uuid, true, p_srv_db->char_num * 3);
 	} else {
-		service = gatt_db_add_service(gatt_db, &uuid, false, p_srv_db->char_num * 4);
+		service = gatt_db_add_service(gatt_db, &uuid, false, p_srv_db->char_num * 3);
 	}
 
 	p_srv_db->srv_handle = gatt_db_attribute_get_handle(service);
@@ -485,9 +615,9 @@ void bluez_gatt_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 		if (is_cccd_exit) {
 			bt_uuid16_create(&uuid, GATT_CLIENT_CHARAC_CFG_UUID);
 			cccd = gatt_db_service_add_descriptor(service, &uuid,
-								BT_ATT_PERM_READ | BT_ATT_PERM_WRITE,
-								gatt_svc_chngd_ccc_read_cb,
-								gatt_svc_chngd_ccc_write_cb, NULL);
+								BT_ATT_PERM_WRITE,
+								NULL,
+								gatt_descriptor_ccc_write_cb, NULL);
 
 			LOGE("cccd handle = %04x", gatt_db_attribute_get_handle(cccd));
 		}
@@ -495,7 +625,7 @@ void bluez_gatt_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 	}
 }
 
-void bluez_gatt_server_start(void)
+void bluez_gatts_server_start(void)
 {
 	struct sockaddr_l2 addr;
 
@@ -570,7 +700,7 @@ void bluez_gatt_server_start(void)
 	mainloop_add_fd(att_fd, EPOLLIN, att_conn_callback, NULL, NULL);
 }
 
-void bluez_gatt_server_stop(void)
+void bluez_gatts_server_stop(void)
 {
 	if (att_fd < 0)
 		return;
