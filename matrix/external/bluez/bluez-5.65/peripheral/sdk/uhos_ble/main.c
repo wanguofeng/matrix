@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include "peripheral/uh_ble.h"
+#include "uh_ble.h"
 
-#define CONFIG_LOG_TAG	"demo"
-#include "peripheral/log.h"
+#define CONFIG_LOG_TAG "demo"
+#include "log.h"
 
 // 定义广播包类型
 #define BLE_AD_TYPE_FLAGS                    0x01
@@ -26,8 +26,8 @@ void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param
 		{
 			uhos_ble_gap_evt_param_t *evt = param;
 
-			LOGW("connected: handle(%04x) role(%02x)", evt->conn_handle, evt->connect.role);
-			LOGW("connected: peer_addr(%02x:%02x:%02x:%02x:%02x:%02x) type(%02x)", evt->connect.peer_addr[5], evt->connect.peer_addr[4], 
+			printf("connected: handle(%04x) role(%02x)", evt->conn_handle, evt->connect.role);
+			printf("connected: peer_addr(%02x:%02x:%02x:%02x:%02x:%02x) type(%02x)", evt->connect.peer_addr[5], evt->connect.peer_addr[4], 
 																			    	evt->connect.peer_addr[3], evt->connect.peer_addr[2],
 																					evt->connect.peer_addr[1], evt->connect.peer_addr[0],
 																					evt->connect.type);
@@ -39,7 +39,7 @@ void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param
     	case UHOS_BLE_GAP_EVT_DISCONNET:
 		{
 			uhos_ble_gap_evt_param_t *evt = param;
-			LOGW("disconnected handle(%04x) reason(%02x)", evt->conn_handle, evt->disconnect.reason);
+			printf("disconnected handle(%04x) reason(%02x)", evt->conn_handle, evt->disconnect.reason);
 			conn_handle = 0x0000;
 			break;
 		}
@@ -50,7 +50,7 @@ void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param
     	case UHOS_BLE_GAP_EVT_ADV_REPORT:
 		{
 			uhos_ble_gap_adv_report_t * rpt = &param->report;
-			LOGW("peer_addr(%02x:%02x:%02x:%02x:%02x:%02x) rssi(%d)", rpt->peer_addr[0], rpt->peer_addr[1], rpt->peer_addr[2],
+			printf("peer_addr(%02x:%02x:%02x:%02x:%02x:%02x) rssi(%d)", rpt->peer_addr[0], rpt->peer_addr[1], rpt->peer_addr[2],
 													rpt->peer_addr[3], rpt->peer_addr[4], rpt->peer_addr[5], rpt->rssi);
 			break;
 		}
@@ -81,7 +81,7 @@ int main(int argc, char *argv[])
 	uhos_ble_enable();
 	uhos_u8 static_addr[6] = {0x00};
 	uhos_ble_address_get(static_addr);
-	LOGD("Using static address %02x:%02x:%02x:%02x:%02x:%02x\n",
+	printf("Using static address %02x:%02x:%02x:%02x:%02x:%02x\n",
 								static_addr[5], static_addr[4], static_addr[3],
 								static_addr[2], static_addr[1], static_addr[0]);
 
