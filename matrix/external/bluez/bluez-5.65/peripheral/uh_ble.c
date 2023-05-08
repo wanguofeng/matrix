@@ -64,12 +64,18 @@ static void signal_callback(int signum, void *user_data)
 		break;
 	}
 }
+
+#define adapter_version     "debug.0508-04"
+// #define adapter_version     "rel.0508-01"
+// #define adapter_version     "tls.0508-01"
+
 static void * bluez_daemon(void *arg)
 {
 	int exit_status = 0;
     uint16_t hci_index = *(uint16_t *) arg;
 
-    LOGI("Bluetooth periperhal ver %s, hci_index = %d", VERSION, hci_index);
+    LOGW("Bluetooth periperhal ver %s, hci_index = %d", VERSION, hci_index);
+    LOGW("Bluetooth Adapter Version %s", adapter_version);
 
 	mainloop_init();
 	bluez_gap_init();
@@ -101,10 +107,8 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
             bdaddr.addr_type = ev->addr.type;
             uint8_t role = conn_info_get_role_by_addr(bdaddr);
             evt_param.conn_handle = conn_info_generate_handle(role);
-
             evt_param.connect.role = role;
-
-            LOGE("type = %02x", ev->addr.type);
+            LOGE("connect handle = %04x", evt_param.conn_handle);
 
             if (ev->addr.type == BDADDR_LE_PUBLIC) {
                 evt_param.connect.type = UHOS_BLE_ADDRESS_TYPE_PUBLIC;
@@ -136,16 +140,21 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
             bdaddr.addr_type = ev->addr.type;
 
             evt_param.conn_handle = conn_info_get_handle_by_addr(bdaddr);
-            uint8_t reason = 0;
+ 
+            uint8_t reason = MGMT_DEV_DISCONN_UNKNOWN;
+
             if (ev->reason == MGMT_DEV_DISCONN_REMOTE) {
-                reason = 0x13;
+                reason = MGMT_DEV_DISCONN_REMOTE;
             } else if (ev->reason == MGMT_DEV_DISCONN_TIMEOUT) {
-                reason = 0x08;
+                reason = MGMT_DEV_DISCONN_TIMEOUT;
             } else if(ev->reason == MGMT_DEV_DISCONN_LOCAL_HOST) {
-                reason = 0x16;
+                reason = MGMT_DEV_DISCONN_LOCAL_HOST;
             } else {
-                reason = 0x3E;
+                reason = MGMT_DEV_DISCONN_UNKNOWN;
             }
+
+            LOGE("disconnect handle = %04x", evt_param.conn_handle);
+
             evt_param.disconnect.reason = reason;
             conn_info_del_gatts(evt_param.conn_handle, bdaddr);
             uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_DISCONNET, &evt_param);
@@ -224,7 +233,7 @@ static void stack_gap_cmd_callback(uint16_t cmd, int8_t status, uint16_t len,
             bdaddr.addr_type = rp->addr.type;
 
             evt_param.conn_handle = conn_info_get_handle_by_addr(bdaddr);
-            uint8_t reason = 0x16;
+            uint8_t reason = MGMT_DEV_DISCONN_LOCAL_HOST;
             evt_param.disconnect.reason = reason;
             conn_info_del_gatts(evt_param.conn_handle, bdaddr);
             uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_DISCONNET, &evt_param);
@@ -251,7 +260,8 @@ static void stack_gatt_server_callback(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_
 uhos_ble_status_t uhos_ble_enable(void)
 {
     int ret = 0;
-    uint16_t hci_index = 1;
+
+    uint16_t hci_index = 0;
 
     if (bluez_daemon_tid != (pthread_t)0) {
         LOGI("bluez daemon is already init");
@@ -433,7 +443,7 @@ uhos_ble_status_t uhos_ble_gap_disconnect(uhos_u16 conn_handle)
     struct addr_info info;
 
     conn_info_get_addr_by_handle(conn_handle, &info);
-    LOGW("type = %02x", info.addr_type);
+    LOGW("disconnect conn_handle(%04x)", conn_handle);
     memcpy(bdaddr.b, info.addr, 6);
 
     bluez_gap_disconnect(&bdaddr, info.addr_type);

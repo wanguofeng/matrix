@@ -807,7 +807,7 @@ static void read_info_complete(uint8_t status, uint16_t len,
 	bluez_gatts_set_static_address(static_addr);
 	bluez_gatts_set_device_name(dev_name, dev_name_len);
 
-	bluez_gatts_server_start();
+	// bluez_gatts_server_start();
 
 	if (adv_features)	
 		mgmt_send_wrapper(mgmt, MGMT_OP_READ_ADV_FEATURES, mgmt_index, 0, NULL,

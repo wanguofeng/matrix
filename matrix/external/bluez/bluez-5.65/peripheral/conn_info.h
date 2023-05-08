@@ -32,6 +32,6 @@ void conn_info_del_gattc(uint16_t conn_handle, const struct addr_info bdaddr);
 uint8_t conn_info_get_role_by_addr(const struct addr_info bdaddr);
 uint8_t conn_info_get_role_by_handle(uint16_t conn_handle);
 uint8_t conn_info_get_addr_by_handle(uint16_t conn_handle, struct addr_info * bdaddr);
-uint8_t conn_info_get_handle_by_addr(const struct addr_info bdaddr);
+uint16_t conn_info_get_handle_by_addr(const struct addr_info bdaddr);
 
 #endif

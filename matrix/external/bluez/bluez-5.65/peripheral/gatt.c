@@ -489,6 +489,7 @@ void bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, u
 void bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uint16_t length)
 {
 	struct gatt_conn *conn = queue_peek_head(conn_list);
+
 	bt_gatt_server_send_indication(conn->gatt,
 					char_handle, value,
 					length,
@@ -538,9 +539,9 @@ void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 	}
 
 	if (p_srv_db->srv_type == UHOS_BLE_PRIMARY_SERVICE) {
-		service = gatt_db_add_service(gatt_db, &uuid, true, p_srv_db->char_num * 3);
+		service = gatt_db_add_service(gatt_db, &uuid, true, p_srv_db->char_num * 4);
 	} else {
-		service = gatt_db_add_service(gatt_db, &uuid, false, p_srv_db->char_num * 3);
+		service = gatt_db_add_service(gatt_db, &uuid, false, p_srv_db->char_num * 4);
 	}
 
 	p_srv_db->srv_handle = gatt_db_attribute_get_handle(service);
@@ -565,41 +566,41 @@ void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 		gatt_db_write_t write_callback = NULL;
 		bool is_cccd_exit = false;
 
-		if (char_db->char_property && UHOS_BLE_CHAR_PROP_BROADCAST)
+		if (char_db->char_property & UHOS_BLE_CHAR_PROP_BROADCAST)
 			properties |= BT_GATT_CHRC_PROP_BROADCAST;
 
-		if (char_db->char_property && UHOS_BLE_CHAR_PROP_READ) {
+		if (char_db->char_property & UHOS_BLE_CHAR_PROP_READ) {
 			properties |= BT_GATT_CHRC_PROP_READ;
 			permission |= BT_ATT_PERM_READ;
 			read_callback = gatt_character_read_cb;
 		}
 
-		if (char_db->char_property && UHOS_BLE_CHAR_PROP_WRITE_WITHOUT_RESP) {
+		if (char_db->char_property & UHOS_BLE_CHAR_PROP_WRITE_WITHOUT_RESP) {
 			properties |= BT_GATT_CHRC_PROP_WRITE_WITHOUT_RESP;
 			permission |= BT_ATT_PERM_WRITE;
 			write_callback = gatt_character_write_cb;
 		}
 
-		if (char_db->char_property && UHOS_BLE_CHAR_PROP_WRITE) {
+		if (char_db->char_property & UHOS_BLE_CHAR_PROP_WRITE) {
 			properties |= BT_GATT_CHRC_PROP_WRITE;
 			permission |= BT_ATT_PERM_WRITE;
 			write_callback = gatt_character_write_cb;
 		}
 
-		if (char_db->char_property && UHOS_BLE_CHAR_PROP_NOTIFY) {
+		if (char_db->char_property & UHOS_BLE_CHAR_PROP_NOTIFY) {
 			properties |= BT_GATT_CHRC_PROP_NOTIFY;
 			is_cccd_exit = true;
 		}
 
-		if (char_db->char_property && UHOS_BLE_CHAR_PROP_INDICATE) {
+		if (char_db->char_property & UHOS_BLE_CHAR_PROP_INDICATE) {
 			properties |= BT_GATT_CHRC_PROP_INDICATE;
 			is_cccd_exit = true;
 		}
 
-		if (char_db->char_property && UHOS_BLE_CHAR_PROP_AUTH_SIGNED_WRITE)
+		if (char_db->char_property & UHOS_BLE_CHAR_PROP_AUTH_SIGNED_WRITE)
 			properties |= BT_GATT_CHRC_PROP_AUTH;
 
-		if (char_db->char_property && UHOS_BLE_CHAR_PROP_EXTENDED_PROPERTIES)
+		if (char_db->char_property & UHOS_BLE_CHAR_PROP_EXTENDED_PROPERTIES)
 			properties |= BT_GATT_CHRC_PROP_EXT_PROP;
 
 		character = gatt_db_service_add_characteristic(service, &uuid,
@@ -688,7 +689,7 @@ void bluez_gatts_server_start(void)
 		return;
 	}
 
-#if 1
+#if 0
 	if (gatt_db != NULL) {
 		// populate_devinfo_service(gatt_db);
 		populate_gap_service(gatt_db);
