@@ -45,7 +45,7 @@
 #define CONFIG_LOG_TAG "Bluez_Adapter"
 #include "peripheral/log.h"
 
-#define Bluez_Adapter_Version     "v1.0.8-alpha-202305092036"
+#define Bluez_Adapter_Version     "v1.0.9-alpha-202305092043"
 
 // #define Bluez_Adapter_Version     "v1.0.1-beta"
 // #define Bluez_Adapter_Version     "v1.1.0-rc"

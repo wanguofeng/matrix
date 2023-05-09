@@ -456,13 +456,8 @@ static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
 {
 	uint8_t ecode = 0;
 
-	if (!value || len != 1) {
+	if (!value) {
 		ecode = BT_ATT_ERROR_INVALID_ATTRIBUTE_VALUE_LEN;
-		goto done;
-	}
-
-	if (offset) {
-		ecode = BT_ATT_ERROR_INVALID_OFFSET;
 		goto done;
 	}
 
