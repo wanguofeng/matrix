@@ -10,10 +10,10 @@
 
 #include <stdint.h>
 
-#define	ADV_IND				0x00
-#define	ADV_DIRECT_IND		0x01
-#define	ADV_SCAN_IND 		0x02
-#define	ADV_NONCONN_IND		0x03
+#define	ADV_IND							0x00
+#define	ADV_DIRECT_IND					0x01
+#define	ADV_SCAN_IND 					0x02
+#define	ADV_NONCONN_IND					0x03
 
 typedef void (*bluez_gap_event_callback_func)(uint16_t event, uint16_t index, uint16_t length,
 					const void *param, void *user_data);

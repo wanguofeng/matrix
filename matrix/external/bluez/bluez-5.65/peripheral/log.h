@@ -61,6 +61,8 @@
 #define	LOGI(fmt, ...)	log_level_printf(LOG_INFO, LOG_C_CYAN "[%s][I]" fmt "\n" LOG_C_DEFAULT, CONFIG_LOG_TAG, ##__VA_ARGS__)
 #define	LOGD(fmt, ...)	log_level_printf(LOG_DEBUG, LOG_C_DEFAULT "[%s][D]" fmt "\n" LOG_C_DEFAULT, CONFIG_LOG_TAG, ##__VA_ARGS__)
 
+extern size_t bin2hex(const uint8_t *buf, size_t buflen, char *str, size_t strlen);
+
 #define LOG_HEXDUMP_DBG(_data, _length, _str)                                  \
 do {                                                                           \
 	char str[(_length)*2];                                                     \

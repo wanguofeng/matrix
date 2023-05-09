@@ -117,7 +117,7 @@ static void client_service_changed_callback(uint16_t start_handle,
 static struct gatt_conn *gatt_conn_new(int fd)
 {
 	struct gatt_conn *conn;
-	uint16_t mtu = 0;
+	uint16_t mtu = BT_ATT_MAX_LE_MTU;
 
 	conn = new0(struct gatt_conn, 1);
 	if (!conn)
@@ -346,7 +346,7 @@ static void gatt_descriptor_ccc_write_cb(struct gatt_db_attribute *attrib,
 	uhos_ble_gatts_evt_t evt = UHOS_BLE_GATTS_EVT_CCCD_UPDATE;
 
 	uhos_ble_gatts_evt_param_t *param = malloc(sizeof(uhos_ble_gatts_evt_param_t));
-	param->write.value_handle = handle;
+	param->write.value_handle = handle - 1;
 	param->write.len = len;
 	param->write.offset = offset;
 	param->write.data = value;
@@ -358,7 +358,8 @@ static void gatt_descriptor_ccc_write_cb(struct gatt_db_attribute *attrib,
 
 done:
 	gatt_db_attribute_write_result(attrib, id, error);
-	free(param);
+	
+	// free(param);
 }
 // static void conf_cb(void *user_data)
 // {
@@ -415,7 +416,7 @@ static void gatt_character_read_cb(struct gatt_db_attribute *attrib,
 					uint8_t opcode, struct bt_att *att,
 					void *user_data)
 {
-	LOGI("Service Changed Read called\n");
+	LOGI("Character Read called\n");
 
 	uint16_t handle = gatt_db_attribute_get_handle(attrib);
 	LOGD("%s handle = %04x", __FUNCTION__, handle);
@@ -424,7 +425,7 @@ static void gatt_character_read_cb(struct gatt_db_attribute *attrib,
 	uhos_ble_gatts_evt_param_t *param = malloc(sizeof(uhos_ble_gatts_evt_param_t));
 
 	uint8_t *value = NULL;
-	uint16_t len = 0;
+	uint16_t len = 5;
 
 	param->read.value_handle = handle;
 	param->read.offset = offset;
@@ -435,8 +436,16 @@ static void gatt_character_read_cb(struct gatt_db_attribute *attrib,
 
 	gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
 
+	LOGI("gatt read len = %d", len);
+
+	LOG_HEXDUMP_DBG(value, len, "gatt read");
+
 	gatt_db_attribute_read_result(attrib, id, 0, value, len);
-	free(param);
+
+	// if (value != NULL)
+	// 	free(value);
+
+	// free(param);
 }
 
 static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
@@ -470,11 +479,14 @@ static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
 
 	struct gatt_conn *conn = queue_peek_head(conn_list);
 
+	LOG_HEXDUMP_DBG(value, len, "gatt write");
+
 	gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
 
 done:
 	gatt_db_attribute_write_result(attrib, id, ecode);
-	free(param);
+
+	// free(param);
 }
 
 void bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, uint16_t length)
@@ -611,7 +623,7 @@ void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 
 		char_db->char_value_handle = gatt_db_attribute_get_handle(character);
 
-		LOGD("char_value_handle = %04x", char_db->char_value_handle);
+		LOGI("char_value_handle = %04x", char_db->char_value_handle);
 
 		if (is_cccd_exit) {
 			bt_uuid16_create(&uuid, GATT_CLIENT_CHARAC_CFG_UUID);
@@ -620,7 +632,7 @@ void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 								NULL,
 								gatt_descriptor_ccc_write_cb, NULL);
 
-			LOGE("cccd handle = %04x", gatt_db_attribute_get_handle(cccd));
+			LOGI("cccd handle = %04x", gatt_db_attribute_get_handle(cccd));
 		}
 		gatt_db_service_set_active(service, true);
 	}

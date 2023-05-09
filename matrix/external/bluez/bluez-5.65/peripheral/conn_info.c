@@ -47,7 +47,7 @@ static bool match_by_conn_handle(const void *data, const void *user_data)
 		return false;
 }
 
-uint16_t conn_info_generate_handle(uint8_t role)
+uint16_t conn_info_generate_handle()
 {
 	static uint16_t conn_handle = MIN_CONNECTION_HANDLE;
 	uint16_t handle = conn_handle ++;

@@ -40,9 +40,16 @@
 
 #include "peripheral/uh_ble.h"
 #include "peripheral/conn_info.h" 
+#include "peripheral/utils.h"
 
 #define CONFIG_LOG_TAG "Bluez_Adapter"
 #include "peripheral/log.h"
+
+#define Bluez_Adapter_Version     "v1.0.8-alpha-202305092036"
+
+// #define Bluez_Adapter_Version     "v1.0.1-beta"
+// #define Bluez_Adapter_Version     "v1.1.0-rc"
+// #define Bluez_Adapter_Version     "v1.1.0-release"
 
 /*
  * BLE COMMON
@@ -65,17 +72,13 @@ static void signal_callback(int signum, void *user_data)
 	}
 }
 
-#define adapter_version     "debug.0508-04"
-// #define adapter_version     "rel.0508-01"
-// #define adapter_version     "tls.0508-01"
-
 static void * bluez_daemon(void *arg)
 {
 	int exit_status = 0;
     uint16_t hci_index = *(uint16_t *) arg;
 
     LOGW("Bluetooth periperhal ver %s, hci_index = %d", VERSION, hci_index);
-    LOGW("Bluetooth Adapter Version %s", adapter_version);
+    LOGW("Bluetooth Adapter Version %s", Bluez_Adapter_Version);
 
 	mainloop_init();
 	bluez_gap_init();
@@ -105,10 +108,12 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
 
             memcpy(bdaddr.addr, ev->addr.bdaddr.b, 6);
             bdaddr.addr_type = ev->addr.type;
+
             uint8_t role = conn_info_get_role_by_addr(bdaddr);
-            evt_param.conn_handle = conn_info_generate_handle(role);
+            evt_param.conn_handle = conn_info_generate_handle();
             evt_param.connect.role = role;
-            LOGE("connect handle = %04x", evt_param.conn_handle);
+
+            LOGI("connected handle = %04x", evt_param.conn_handle);
 
             if (ev->addr.type == BDADDR_LE_PUBLIC) {
                 evt_param.connect.type = UHOS_BLE_ADDRESS_TYPE_PUBLIC;
@@ -140,17 +145,17 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
             bdaddr.addr_type = ev->addr.type;
 
             evt_param.conn_handle = conn_info_get_handle_by_addr(bdaddr);
- 
-            uint8_t reason = MGMT_DEV_DISCONN_UNKNOWN;
+
+            uint8_t reason = UNKNOW_OTHER_ERROR;
 
             if (ev->reason == MGMT_DEV_DISCONN_REMOTE) {
-                reason = MGMT_DEV_DISCONN_REMOTE;
+                reason = UHOS_BLE_REMOTE_USER_TERMINATED;
             } else if (ev->reason == MGMT_DEV_DISCONN_TIMEOUT) {
-                reason = MGMT_DEV_DISCONN_TIMEOUT;
-            } else if(ev->reason == MGMT_DEV_DISCONN_LOCAL_HOST) {
-                reason = MGMT_DEV_DISCONN_LOCAL_HOST;
+                reason = UHOS_BLE_CONNECTION_TIMEOUT;
+            } else if (ev->reason == MGMT_DEV_DISCONN_LOCAL_HOST) {
+                reason = UHOS_BLE_LOCAL_HOST_TERMINATED;
             } else {
-                reason = MGMT_DEV_DISCONN_UNKNOWN;
+                reason = UNKNOW_OTHER_ERROR;
             }
 
             LOGE("disconnect handle = %04x", evt_param.conn_handle);
@@ -261,7 +266,7 @@ uhos_ble_status_t uhos_ble_enable(void)
 {
     int ret = 0;
 
-    uint16_t hci_index = 0;
+    uint16_t hci_index = MGMT_INDEX_NONE;
 
     if (bluez_daemon_tid != (pthread_t)0) {
         LOGI("bluez daemon is already init");
