@@ -1155,11 +1155,15 @@ obexd_src_obexd_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(LDFLAGS) -o $@
 am__peripheral_btsensor_SOURCES_DIST = peripheral/main.c \
 	peripheral/uh_ble.h peripheral/uh_ble.c \
+	peripheral/conn_info.h peripheral/conn_info.c \
+	peripheral/utils.h peripheral/utils.c \
 	peripheral/gap.h peripheral/gap.c peripheral/gatt.h \
 	peripheral/gatt.c
 @TESTING_TRUE@am_peripheral_btsensor_OBJECTS =  \
 @TESTING_TRUE@	peripheral/main.$(OBJEXT) \
 @TESTING_TRUE@	peripheral/uh_ble.$(OBJEXT) \
+@TESTING_TRUE@	peripheral/conn_info.$(OBJEXT) \
+@TESTING_TRUE@	peripheral/utils.$(OBJEXT) \
 @TESTING_TRUE@	peripheral/gap.$(OBJEXT) \
 @TESTING_TRUE@	peripheral/gatt.$(OBJEXT)
 peripheral_btsensor_OBJECTS = $(am_peripheral_btsensor_OBJECTS)
@@ -3572,6 +3576,8 @@ unit_tests = $(am__append_55) unit/test-eir unit/test-uuid \
 @TESTING_TRUE@emulator_hfp_LDADD = src/libshared-mainloop.la
 @TESTING_TRUE@peripheral_btsensor_SOURCES = peripheral/main.c \
 @TESTING_TRUE@				peripheral/uh_ble.h peripheral/uh_ble.c \
+@TESTING_TRUE@				peripheral/conn_info.h peripheral/conn_info.c \
+@TESTING_TRUE@				peripheral/utils.h peripheral/utils.c \
 @TESTING_TRUE@				peripheral/gap.h peripheral/gap.c \
 @TESTING_TRUE@				peripheral/gatt.h peripheral/gatt.c
 
