@@ -14,21 +14,32 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/eventfd.h>
 #include <semaphore.h>
 #include <time.h>
+#include <sys/epoll.h>
+#include <unistd.h>
+#include <errno.h>
 
 #include "lib/bluetooth.h"
 #include "lib/mgmt.h"
-#include "src/shared/util.h"
 #include "src/shared/mgmt.h"
 #include "peripheral/gatt.h"
 #include "peripheral/gap.h"
 #include "peripheral/utils.h"
+#include "src/shared/mainloop.h"
+#include "src/shared/util.h"
+#include "src/shared/queue.h"
 
 #define CONFIG_LOG_TAG "Bluez_Stack"
 #include "peripheral/log.h"
 
 #define ADV_MAX_LENGTH	31
+
+static int event_fd = 0;
+
+static struct queue *pending_cmd_list = NULL;
+static struct queue *pending_cmd_tlv_list = NULL;
 
 static struct mgmt *mgmt = NULL;
 static uint16_t mgmt_index = MGMT_INDEX_NONE;
@@ -54,6 +65,8 @@ static uint8_t g_scan_rsp_len = 0;
 static bluez_gap_event_callback_func g_event_cb = NULL;
 static bluez_gap_cmd_callback_func g_cmd_cb = NULL;
 
+static void recv_cmd(int fd, uint32_t events, void *user_data);
+
 struct send_sync {
 	sem_t sem;
 	uint16_t opcode;
@@ -61,64 +74,80 @@ struct send_sync {
 	void *userdata;
 };
 
-static unsigned int mgmt_send_tlv_wrapper(struct mgmt *mgmt, uint16_t opcode, uint16_t index,
-				struct mgmt_tlv_list *tlv_list,
-				mgmt_request_func_t callback,
-				void *user_data, mgmt_destroy_func_t destroy)
-{
-	LOGD("mgmt_send_tlv: %s(0x%04x) index(0x%04x)", opcode_str(opcode), opcode, index);
-	mgmt_send_tlv(mgmt, opcode, index, tlv_list, callback, user_data, destroy);
-}
+typedef struct _mgmt_send_async {
+	struct mgmt *mgmt;
+	uint16_t opcode;
+	uint16_t index;
+	uint16_t length;
+	void *param;
+	mgmt_request_func_t callback;
+	void *user_data;
+	mgmt_destroy_func_t destroy;
+} mgmt_send_async;
 
-static unsigned int mgmt_send_wrapper(struct mgmt *mgmt, uint16_t opcode, uint16_t index,
+typedef struct _mgmt_send_tlv_async {
+	struct mgmt *mgmt;
+	uint16_t opcode;
+	uint16_t index;
+	struct mgmt_tlv_list *tlv_list;
+	mgmt_request_func_t callback;
+	void *user_data;
+	mgmt_destroy_func_t destroy;
+} mgmt_send_tlv_async;
+
+static int8_t mgmt_send_wrapper(struct mgmt *mgmt, uint16_t opcode, uint16_t index,
 				uint16_t length, const void *param,
 				mgmt_request_func_t callback,
 				void *user_data, mgmt_destroy_func_t destroy)
 {
-	LOGD("mgmt_send: %s(0x%04x) index(0x%04x)", opcode_str(opcode), opcode, index);
-	mgmt_send(mgmt, opcode, index, length, param, callback, user_data, destroy);
+	mgmt_send_async *mgmt_cmd = malloc(sizeof(mgmt_send_async));
+
+	mgmt_cmd->mgmt = mgmt;
+	mgmt_cmd->opcode = opcode;
+	mgmt_cmd->index = index;
+	mgmt_cmd->length = length;
+	mgmt_cmd->param = param;
+	mgmt_cmd->callback = callback;
+	mgmt_cmd->user_data = user_data;
+	mgmt_cmd->destroy = destroy;
+
+	if (!queue_push_head(pending_cmd_list, mgmt_cmd)) {
+		LOGE("add to pending_cmd_list failed");
+	}
+	int ret = eventfd_write(event_fd, 1);
+	if (ret < 0) {
+		LOGE("write event fd fail:%s", strerror(errno));
+		return -1;
+	}
+
+	return 0;
 }
 
-static void mgmt_sync_callback(uint8_t status, uint16_t len,
-					const void *param, void *user_data)
+static int8_t mgmt_send_tlv_wrapper(struct mgmt *mgmt, uint16_t opcode, uint16_t index,
+				struct mgmt_tlv_list *tlv_list,
+				mgmt_request_func_t callback,
+				void *user_data, mgmt_destroy_func_t destroy)
 {
-	struct send_sync * sync = (struct send_sync * )user_data;
-	sync->status = status;
+	mgmt_send_tlv_async *mgmt_send_tlv = malloc(sizeof(mgmt_send_tlv_async));
 
-	if (sync->userdata != NULL)
-		memcpy(sync->userdata, param, len);
-	
-	LOGD("mgmt_send_sync_callback %s status(0x%02x)", opcode_str(sync->opcode), sync->status);
-	
-	sem_post(&sync->sem);
-}
+	mgmt_send_tlv->mgmt = mgmt;
+	mgmt_send_tlv->opcode = opcode;
+	mgmt_send_tlv->index = index;
+	mgmt_send_tlv->tlv_list = tlv_list;
+	mgmt_send_tlv->callback = callback;
+	mgmt_send_tlv->user_data = user_data;
+	mgmt_send_tlv->destroy = destroy;
 
-static uint8_t mgmt_send_sync(struct mgmt *mgmt, uint16_t opcode, uint16_t index,
-				uint16_t length, const void *param, void *user_data, mgmt_destroy_func_t destroy)
-{
-	struct send_sync sync = {0x00};
-	sync.opcode = opcode;
-	sync.userdata = user_data;
+	if (!queue_push_head(pending_cmd_tlv_list, mgmt_send_tlv)) {
+		LOGE("add to pending_cmd_tlv_list failed");
+	}
+	int ret = eventfd_write(event_fd, 1);
+	if (ret < 0) {
+		LOGE("write event fd fail:%s", strerror(errno));
+		return -1;
+	}
 
-	struct timespec ts;
-	clock_gettime(CLOCK_REALTIME, &ts);
-	// ts.tv_nsec += 50 * 1000000; // 50 ms
-	ts.tv_sec = 5;
-	sem_init(&sync.sem, 0, 0);
-
-	mgmt_send_wrapper(mgmt, opcode, index, length, param, mgmt_sync_callback, &sync, destroy);
-
-	LOGD("wait sem");
-	
-	// int ret = sem_timedwait(&sync.sem, &ts);
-
-	int ret = sem_wait(&sync.sem);
-
-	LOGD("wait sem done ret = %d", ret);
-
-	sem_destroy(&sync.sem);
-
-	return sync.status;
+	return 0;
 }
 
 static void cmd_callback(uint16_t cmd, int8_t status, uint16_t len,
@@ -142,7 +171,7 @@ static void clear_long_term_keys(uint16_t index)
 	memset(&cp, 0, sizeof(cp));
 	cp.key_count = cpu_to_le16(0);
 
-	mgmt_send_wrapper(mgmt, MGMT_OP_LOAD_LONG_TERM_KEYS, index,
+	mgmt_send(mgmt, MGMT_OP_LOAD_LONG_TERM_KEYS, index,
 									sizeof(cp), &cp, NULL, NULL, NULL);
 }
 
@@ -153,7 +182,7 @@ static void clear_identity_resolving_keys(uint16_t index)
 	memset(&cp, 0, sizeof(cp));
 	cp.irk_count = cpu_to_le16(0);
 
-	mgmt_send_wrapper(mgmt, MGMT_OP_LOAD_IRKS, index,
+	mgmt_send(mgmt, MGMT_OP_LOAD_IRKS, index,
 									sizeof(cp), &cp, NULL, NULL, NULL);
 }
 
@@ -260,7 +289,7 @@ static void index_added_event(uint16_t index, uint16_t length,
 	if (mgmt_index != MGMT_INDEX_NONE)
 		return;
 
-	// mgmt_send_wrapper(mgmt, MGMT_OP_READ_INFO, index, 0, NULL,
+	// mgmt_send(mgmt, MGMT_OP_READ_INFO, index, 0, NULL,
 	// 			read_info_complete, UINT_TO_PTR(index), NULL);
 }
 
@@ -306,6 +335,7 @@ static void read_sysconfig_rsp(uint8_t status, uint16_t len, const void *param,
 	mgmt_tlv_list_free(tlv_list);
 	
 	cmd_callback(MGMT_OP_READ_DEF_SYSTEM_CONFIG, status, len, param, user_data);
+
 }
 
 static void reset_complete(uint8_t status, uint16_t len,
@@ -316,7 +346,7 @@ static void reset_complete(uint8_t status, uint16_t len,
 	cmd_callback(MGMT_OP_SET_POWERED, status, len, param, user_data);
 
 	// enable_advertising(index);
-	mgmt_send_wrapper(mgmt, MGMT_OP_READ_DEF_SYSTEM_CONFIG, mgmt_index, 0, NULL,
+	mgmt_send(mgmt, MGMT_OP_READ_DEF_SYSTEM_CONFIG, mgmt_index, 0, NULL,
 					read_sysconfig_rsp, NULL, NULL);
 }
 
@@ -343,14 +373,15 @@ static void read_adv_features_complete(uint8_t status, uint16_t len,
 
 	for (int i = 0; i < rp->num_instances; i ++) {
 		struct mgmt_cp_remove_advertising cmd = { 0x00 };
+		memset(&cmd, 0, sizeof(cmd));
 		cmd.instance = rp->instance[i];
 
-		mgmt_send_wrapper(mgmt, MGMT_OP_REMOVE_ADVERTISING, mgmt_index, 1, &cmd,
+		mgmt_send(mgmt, MGMT_OP_REMOVE_ADVERTISING, mgmt_index, 1, &cmd,
 					NULL, NULL, NULL);
 	}
 	
 	val = 0x01;
-	mgmt_send_wrapper(mgmt, MGMT_OP_SET_POWERED, index, 1, &val,
+	mgmt_send(mgmt, MGMT_OP_SET_POWERED, index, 1, &val,
 							reset_complete, UINT_TO_PTR(mgmt_index), NULL);
 }
 
@@ -362,7 +393,7 @@ static void read_info_complete(uint8_t status, uint16_t len,
 	uint32_t required_settings = MGMT_SETTING_LE |
 					MGMT_SETTING_STATIC_ADDRESS;
 	uint32_t supported_settings, current_settings;
-	uint8_t val;
+	uint8_t val = 0;
 
 	required_settings = MGMT_SETTING_LE;
 
@@ -428,64 +459,63 @@ static void read_info_complete(uint8_t status, uint16_t len,
 
 	if (current_settings & MGMT_SETTING_POWERED) {
 		val = 0x00;
-		mgmt_send_wrapper(mgmt, MGMT_OP_SET_POWERED, index, 1, &val,
+		mgmt_send(mgmt, MGMT_OP_SET_POWERED, index, 1, &val,
 							NULL, NULL, NULL);
 	}
 
 	if (!(current_settings & MGMT_SETTING_LE)) {
 		val = 0x01;
-		mgmt_send_wrapper(mgmt, MGMT_OP_SET_LE, index, 1, &val,
+		mgmt_send(mgmt, MGMT_OP_SET_LE, index, 1, &val,
 							NULL, NULL, NULL);
 	}
 
 	if (current_settings & MGMT_SETTING_CONNECTABLE) {
 		val = 0x00;
-		mgmt_send_wrapper(mgmt, MGMT_OP_SET_CONNECTABLE, index, 1, &val,
+		mgmt_send(mgmt, MGMT_OP_SET_CONNECTABLE, index, 1, &val,
 							NULL, NULL, NULL);
 	}
 
 	if (current_settings & MGMT_SETTING_BREDR) {
 		val = 0x00;
-		mgmt_send_wrapper(mgmt, MGMT_OP_SET_BREDR, index, 1, &val,
+		mgmt_send(mgmt, MGMT_OP_SET_BREDR, index, 1, &val,
 							NULL, NULL, NULL);
 	}
 
 	if (current_settings & MGMT_SETTING_SECURE_CONN) {
 		val = 0x00;
-		mgmt_send_wrapper(mgmt, MGMT_OP_SET_SECURE_CONN, index, 1, &val,
+		mgmt_send(mgmt, MGMT_OP_SET_SECURE_CONN, index, 1, &val,
 							NULL, NULL, NULL);
 	}
 
 	if (current_settings & MGMT_SETTING_DEBUG_KEYS) {
 		val = 0x00;
-		mgmt_send_wrapper(mgmt, MGMT_OP_SET_DEBUG_KEYS, index, 1, &val,
+		mgmt_send(mgmt, MGMT_OP_SET_DEBUG_KEYS, index, 1, &val,
 							NULL, NULL, NULL);
 	}
 
 	/* disable bond support. */
 	if ((current_settings & MGMT_SETTING_BONDABLE)) {
 		val = 0x00;
-		mgmt_send_wrapper(mgmt, MGMT_OP_SET_BONDABLE, index, 1, &val,
+		mgmt_send(mgmt, MGMT_OP_SET_BONDABLE, index, 1, &val,
 							NULL, NULL, NULL);
 	}
 
 	clear_long_term_keys(mgmt_index);
     clear_identity_resolving_keys(mgmt_index);
 
-
-	mgmt_send_wrapper(mgmt, MGMT_OP_SET_STATIC_ADDRESS, index,
+	mgmt_send(mgmt, MGMT_OP_SET_STATIC_ADDRESS, index,
 	 				6, static_addr, NULL, NULL, NULL);
 
-	// mgmt_send_wrapper(mgmt, MGMT_OP_SET_LOCAL_NAME, index,
+	// mgmt_send(mgmt, MGMT_OP_SET_LOCAL_NAME, index,
 	// 				260, dev_name, NULL, NULL, NULL);
 
 	bluez_gatts_set_static_address(static_addr);
 	bluez_gatts_set_device_name(dev_name, dev_name_len);
 
-	// bluez_gatts_server_start();
+	mainloop_add_fd(event_fd, EPOLLIN, recv_cmd, NULL, NULL);
 
 	if (adv_features)	
-		mgmt_send_wrapper(mgmt, MGMT_OP_READ_ADV_FEATURES, mgmt_index, 0, NULL,
+		mgmt_send(mgmt, MGMT_OP_READ_ADV_FEATURES, mgmt_index, 0, NULL,
 						read_adv_features_complete,
 						UINT_TO_PTR(mgmt_index), NULL);
 }
@@ -511,13 +541,13 @@ static void read_index_list_complete(uint8_t status, uint16_t len,
 
 	if (mgmt_index != MGMT_INDEX_NONE) {
 		/* App select mgmt index*/
-		mgmt_send_wrapper(mgmt, MGMT_OP_READ_INFO, mgmt_index, 0, NULL,
+		mgmt_send(mgmt, MGMT_OP_READ_INFO, mgmt_index, 0, NULL,
 				read_info_complete, UINT_TO_PTR(mgmt_index), NULL);
 	} else {
 		/* Select first support le feature controller */
 		for (i = 0; i < count; i++) {
 			uint16_t index = cpu_to_le16(rp->index[i]);
-			mgmt_send_wrapper(mgmt, MGMT_OP_READ_INFO, index, 0, NULL,
+			mgmt_send(mgmt, MGMT_OP_READ_INFO, index, 0, NULL,
 					read_info_complete, UINT_TO_PTR(index), NULL);
 		}
 	}
@@ -563,7 +593,7 @@ static void read_commands_complete(uint8_t status, uint16_t len,
 	mgmt_register(mgmt, MGMT_EV_INDEX_REMOVED, MGMT_INDEX_NONE,
 				index_removed_event, NULL, NULL);
 												
-	if (!mgmt_send_wrapper(mgmt, MGMT_OP_READ_INDEX_LIST,
+	if (!mgmt_send(mgmt, MGMT_OP_READ_INDEX_LIST,
 			MGMT_INDEX_NONE, 0, NULL,
 			read_index_list_complete, NULL, NULL)) {
 		LOGE("Failed to read index list");
@@ -584,7 +614,7 @@ static void read_version_complete(uint8_t status, uint16_t len,
 		LOGE("Reading version failed: %s", mgmt_errstr(status));
 	}
 
-	if (!mgmt_send_wrapper(mgmt, MGMT_OP_READ_COMMANDS,
+	if (!mgmt_send(mgmt, MGMT_OP_READ_COMMANDS,
 				MGMT_INDEX_NONE, 0, NULL,
 				read_commands_complete, NULL, NULL)) {
 		LOGE("Failed to read supported commands");
@@ -597,6 +627,12 @@ static void get_conn_info_rsp(uint8_t status, uint16_t len, const void *param,
 {
 	const struct mgmt_rp_get_conn_info *rp = param;
 	char addr[18];
+
+	struct send_sync *sync = user_data;
+
+	sync->status = status;
+	memcpy(sync->userdata, param, len);
+	sem_post(&sync->sem);
 
 	if (len == 0 && status != 0) {
 		LOGE("Get Conn Info failed, status 0x%02x (%s)",
@@ -621,6 +657,7 @@ static void get_conn_info_rsp(uint8_t status, uint16_t len, const void *param,
 		LOGD("\tRSSI %d\tTX power %d\tmaximum TX power %d",
 				rp->rssi, rp->tx_power, rp->max_tx_power);
 	}
+
 }
 
 static void set_disconnect_rsp(uint8_t status, uint16_t len, const void *param,
@@ -649,7 +686,6 @@ static void set_disconnect_rsp(uint8_t status, uint16_t len, const void *param,
 	cmd_callback(MGMT_OP_DISCONNECT, status, len, param, user_data);
 }
 
-
 static void set_sysconfig_item(uint16_t type, uint8_t length, uint8_t value[])
 {
 	struct mgmt_tlv_list *tlv_list = NULL;
@@ -669,20 +705,18 @@ static void set_sysconfig_item(uint16_t type, uint8_t length, uint8_t value[])
 	mgmt_send_tlv_wrapper(mgmt, MGMT_OP_SET_DEF_SYSTEM_CONFIG, mgmt_index,
 				tlv_list, set_sysconfig_rsp, NULL, NULL);
 
-	if (tlv_list)
-		mgmt_tlv_list_free(tlv_list);
+	// if (tlv_list)
+	// 	mgmt_tlv_list_free(tlv_list);
 }
 
 static void advertising_set_adv_param(uint16_t adv_max_interval, uint16_t adv_min_interval)
 {
 	char value[256] = {0x00};
 
-	LOGI("adv_interval(%04x)", adv_max_interval);
 	/* set adv max interval */
 	value[0] = le16(adv_max_interval);
 	value[1] = le16((adv_max_interval >> 8));
 
-	LOGI("value[0](%x) value[1](%x)", value[0], value[1]);
 	set_sysconfig_item(0x000a, 0x02, value);
 
 	/* set adv min interval */
@@ -693,10 +727,12 @@ static void advertising_set_adv_param(uint16_t adv_max_interval, uint16_t adv_mi
 
 static void advertising_rm_adv(uint8_t instance)
 {
-	struct mgmt_cp_remove_advertising cmd = {0x00};
-	cmd.instance = instance;
+	struct mgmt_cp_remove_advertising *cp = malloc(sizeof(*cp));
+	memset(cp, 0x00, sizeof(*cp));
+
+	cp->instance = instance;
 	mgmt_send_wrapper(mgmt, MGMT_OP_REMOVE_ADVERTISING,
-				mgmt_index, sizeof(cmd), &cmd,
+				mgmt_index, sizeof(*cp), cp,
 				NULL, NULL, NULL);
 	g_adv_running = false;
 }
@@ -747,8 +783,7 @@ static void advertising_add_adv(uint8_t adv_type, uint8_t instance, uint8_t * ad
 			sizeof(*cp) + adv_len + scan_rsp_len, buf, NULL, NULL, NULL);
 
 	g_adv_running = true;
-	
-	free(buf);
+
 }
 
 /*
@@ -806,11 +841,14 @@ static void device_found(uint16_t index, uint16_t len, const void *param,
 
 static void start_scan()
 {
-	struct mgmt_cp_start_discovery cp;
-	cp.type = (1 << BDADDR_LE_PUBLIC)|(1 << BDADDR_LE_RANDOM);
+	struct mgmt_cp_start_discovery *cp = malloc(sizeof(*cp));
+
+	memset(cp, 0, sizeof(*cp));
+
+	cp->type = (1 << BDADDR_LE_PUBLIC)|(1 << BDADDR_LE_RANDOM);
 
 	mgmt_send_wrapper(mgmt, MGMT_OP_START_DISCOVERY,
-				mgmt_index, sizeof(cp), &cp,
+				mgmt_index, sizeof(*cp), cp,
 				NULL, NULL, NULL);
 
 	discovery_id = mgmt_register(mgmt, MGMT_EV_DEVICE_FOUND, mgmt_index, device_found,
@@ -819,11 +857,14 @@ static void start_scan()
 
 static void stop_scan()
 {
-	struct mgmt_cp_stop_discovery cp;
-	cp.type = (1 << BDADDR_LE_PUBLIC)|(1 << BDADDR_LE_RANDOM);
+	struct mgmt_cp_stop_discovery *cp = malloc(sizeof(*cp));
+
+	memset(cp, 0, sizeof(*cp));
+
+	cp->type = (1 << BDADDR_LE_PUBLIC)|(1 << BDADDR_LE_RANDOM);
 
 	mgmt_send_wrapper(mgmt, MGMT_OP_STOP_DISCOVERY,
-				mgmt_index, sizeof(cp), &cp,
+				mgmt_index, sizeof(*cp), cp,
 				NULL, NULL, NULL);
 
 	if (discovery_id != -1)
@@ -843,6 +884,50 @@ static void set_scan_param(uint16_t scan_interval, uint16_t scan_window)
 	value[0] = 0x00;
 	value[1] = 0x01;
 	set_sysconfig_item(0x0012, 0x02, value);
+}
+
+static void recv_cmd(int fd, uint32_t events, void *user_data)
+{
+    if (events & (EPOLLERR | EPOLLHUP)) {
+        mainloop_remove_fd(fd);
+        return;
+    }
+
+    eventfd_t count = 0;
+    int ret = eventfd_read(fd, &count);
+
+    if (ret < 0) {
+		LOGE("read fail:");
+		return;
+    }
+
+    LOGD("eventfd_read count = %ld", count);
+
+	mgmt_send_async * mgmt_cmd = queue_pop_head(pending_cmd_list);
+	if (mgmt_cmd != NULL) {
+		LOGD("mgmt_send: %s(0x%04x) index(0x%04x)", opcode_str(mgmt_cmd->opcode), mgmt_cmd->opcode, mgmt_cmd->index);
+		mgmt_send(mgmt_cmd->mgmt, mgmt_cmd->opcode, mgmt_cmd->index, mgmt_cmd->length, mgmt_cmd->param, 
+											mgmt_cmd->callback, mgmt_cmd->user_data, mgmt_cmd->destroy);
+
+		if (mgmt_cmd->param != NULL)
+			free(mgmt_cmd->param);
+
+		free(mgmt_cmd);
+			return;
+	}
+
+	mgmt_send_tlv_async * mgmt_tlv = queue_pop_head(pending_cmd_tlv_list);
+	if (mgmt_tlv != NULL) {
+		LOGD("mgmt_send_tlv: %s(0x%04x) index(0x%04x)", opcode_str(mgmt_tlv->opcode), mgmt_tlv->opcode, mgmt_tlv->index);
+		mgmt_send_tlv(mgmt_tlv->mgmt, mgmt_tlv->opcode, mgmt_tlv->index, mgmt_tlv->tlv_list,
+						mgmt_tlv->callback, mgmt_tlv->user_data, mgmt_tlv->destroy);
+
+		if (mgmt_tlv->tlv_list)
+			mgmt_tlv_list_free(mgmt_tlv->tlv_list);
+
+		free(mgmt_tlv);
+			return;
+	}
 }
 
 void bluez_gap_set_adv_data(uint8_t const * adv, uint8_t adv_len, uint8_t const * scan_rsp, uint8_t scan_rsp_len) 
@@ -915,33 +1000,47 @@ void bluez_gap_get_address(uint8_t addr[6])
 
 void bluez_gap_disconnect(const bdaddr_t *bdaddr, uint8_t bdaddr_type)
 {
-	struct mgmt_cp_disconnect cp;
-
-	memset(&cp, 0, sizeof(cp));
-	bacpy(&cp.addr.bdaddr, bdaddr);
-	cp.addr.type = bdaddr_type;
-
 	char addr[18], *name;
+	struct mgmt_cp_disconnect *cp = malloc(sizeof(*cp));
+	memset(cp, 0, sizeof(*cp));
+
+	bacpy(&cp->addr.bdaddr, bdaddr);
+
+	cp->addr.type = bdaddr_type;
 
 	ba2str(bdaddr, addr);
 	LOGW("type(%02x) bdaddr(%s)", bdaddr_type, addr);
 
 	mgmt_send_wrapper(mgmt, MGMT_OP_DISCONNECT,
-						mgmt_index, sizeof(cp), &cp,
+						mgmt_index, sizeof(*cp), cp,
 						set_disconnect_rsp, NULL, NULL);
 }
 
 void bluez_gap_get_conn_rssi(uint8_t *peer_addr, uint8_t type, uint8_t *rssi)
 {
-	struct mgmt_cp_get_conn_info cp = {0x00};
-	memcpy(cp.addr.bdaddr.b, peer_addr, 6);
-	cp.addr.type = type;
+	struct mgmt_cp_get_conn_info *cp = malloc(sizeof(*cp));
+	memset(cp, 0, sizeof(*cp));
+	memcpy(cp->addr.bdaddr.b, peer_addr, 6);
+	cp->addr.type = type;
 
-	if (mgmt_send_wrapper(mgmt, MGMT_OP_GET_CONN_INFO, mgmt_index, sizeof(cp), &cp,
-					get_conn_info_rsp, NULL, NULL)) {
+	struct send_sync sync = {0x00};
+	sync.opcode = MGMT_OP_GET_CONN_INFO;
+	sync.userdata = malloc(256);
+	sem_init(&sync.sem, 0, 0);
+
+	if (mgmt_send_wrapper(mgmt, MGMT_OP_GET_CONN_INFO, mgmt_index, sizeof(*cp), cp,
+					get_conn_info_rsp, &sync, NULL)) {
 		LOGE("Send get_conn_info cmd fail");
-		return;
+		goto END;
 	}
+
+	sem_wait(&sync.sem);
+
+	struct mgmt_rp_get_conn_info *rp = (struct mgmt_rp_get_conn_info *)sync.userdata;
+	*rssi = rp->rssi;
+END:
+	sem_destroy(&sync.sem);
+	free(sync.userdata);
 }
 
 void bluez_gap_set_static_address(uint8_t addr[6])
@@ -950,6 +1049,9 @@ void bluez_gap_set_static_address(uint8_t addr[6])
 	LOGD("Using static address %02x:%02x:%02x:%02x:%02x:%02x",
 			static_addr[5], static_addr[4], static_addr[3],
 			static_addr[2], static_addr[1], static_addr[0]);
+
+	mgmt_send_wrapper(mgmt, MGMT_OP_SET_STATIC_ADDRESS, mgmt_index,
+						6, static_addr, NULL, NULL, NULL);
 }
 
 void bluez_gap_register_callback(bluez_gap_cmd_callback_func cmd_cb, bluez_gap_event_callback_func event_cb)
@@ -973,7 +1075,12 @@ void bluez_gap_adapter_init(uint16_t hci_index)
 {
 	mgmt_index = hci_index;
 
-	if (!mgmt_send_wrapper(mgmt, MGMT_OP_READ_VERSION,
+	pending_cmd_list = queue_new();
+	pending_cmd_tlv_list = queue_new();
+	event_fd = eventfd(0, EFD_SEMAPHORE|EFD_NONBLOCK);
+	LOGW("event_fd = %d", event_fd);
+
+	if (!mgmt_send(mgmt, MGMT_OP_READ_VERSION,
 				MGMT_INDEX_NONE, 0, NULL,
 				read_version_complete, NULL, NULL)) {
 		LOGE("Failed to read version");
@@ -990,4 +1097,10 @@ void bluez_gap_uinit(void)
 	mgmt = NULL;
 
 	mgmt_index = MGMT_INDEX_NONE;
+
+	if (pending_cmd_list != NULL)
+        queue_destroy(pending_cmd_list, free);
+
+	if (pending_cmd_tlv_list != NULL)
+        queue_destroy(pending_cmd_tlv_list, free);
 }

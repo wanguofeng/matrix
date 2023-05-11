@@ -45,7 +45,7 @@
 #define CONFIG_LOG_TAG "Bluez_Adapter"
 #include "peripheral/log.h"
 
-#define Bluez_Adapter_Version     "v1.0.9-alpha-202305092043"
+#define Bluez_Adapter_Version     "v1.0.10-alpha-202305111810"
 
 // #define Bluez_Adapter_Version     "v1.0.1-beta"
 // #define Bluez_Adapter_Version     "v1.1.0-rc"
@@ -244,7 +244,6 @@ static void stack_gap_cmd_callback(uint16_t cmd, int8_t status, uint16_t len,
             uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_DISCONNET, &evt_param);
             break;
         }
-
         default:
             break;
     }
@@ -265,7 +264,6 @@ static void stack_gatt_server_callback(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_
 uhos_ble_status_t uhos_ble_enable(void)
 {
     int ret = 0;
-
     uint16_t hci_index = MGMT_INDEX_NONE;
 
     if (bluez_daemon_tid != (pthread_t)0) {
@@ -274,13 +272,9 @@ uhos_ble_status_t uhos_ble_enable(void)
     }
 
     conn_info_init();
-
     sem_init(&bluez_adapter_sem, 0, 0);
-
     bluez_gap_register_callback(stack_gap_cmd_callback, stack_gap_event_callback);
-
     bluez_gatts_register_callback(stack_gatt_server_callback);
-
     ret = pthread_create(&bluez_daemon_tid, NULL, bluez_daemon, &hci_index);
     if (ret != 0) {
         LOGI("Error creating thread!");
@@ -289,7 +283,7 @@ uhos_ble_status_t uhos_ble_enable(void)
     }
 
     sem_wait(&bluez_adapter_sem);
-
+    bluez_gatts_server_start();
     LOGI("create bluez_daemon success!");
     return UHOS_BLE_SUCCESS;
 }

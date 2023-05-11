@@ -28,9 +28,9 @@ void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param
 
 			LOGW("connected: handle(%04x) role(%02x)", evt->conn_handle, evt->connect.role);
 			LOGW("connected: peer_addr(%02x:%02x:%02x:%02x:%02x:%02x) type(%02x)", evt->connect.peer_addr[5], evt->connect.peer_addr[4], 
-																			    	evt->connect.peer_addr[3], evt->connect.peer_addr[2],
-																					evt->connect.peer_addr[1], evt->connect.peer_addr[0],
-																					evt->connect.type);
+						evt->connect.peer_addr[3], evt->connect.peer_addr[2],
+						evt->connect.peer_addr[1], evt->connect.peer_addr[0],
+						evt->connect.type);
 			type = evt->connect.type;
 			memcpy(peer_addr, evt->connect.peer_addr, 6);
 			conn_handle = evt->conn_handle; 
@@ -51,7 +51,7 @@ void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param
 		{
 			uhos_ble_gap_adv_report_t * rpt = &param->report;
 			LOGW("peer_addr(%02x:%02x:%02x:%02x:%02x:%02x) rssi(%d)", rpt->peer_addr[0], rpt->peer_addr[1], rpt->peer_addr[2],
-													rpt->peer_addr[3], rpt->peer_addr[4], rpt->peer_addr[5], rpt->rssi);
+					rpt->peer_addr[3], rpt->peer_addr[4], rpt->peer_addr[5], rpt->rssi);
 			break;
 		}
 	}
@@ -104,28 +104,23 @@ int main(int argc, char *argv[])
 	uhos_ble_gap_callback_register(uh_ble_gap_callback);
 
 	uint16_t count = 0;
+
 	while(1)
 	{
 		sleep(1);
-
 		uhos_s8 rssi = 0;
 		uhos_u16 mtu = 0;
+
 		if (conn_handle != 0x0000) {
 			count ++;
-			LOGI("count = %d", count);
-
 			uhos_ble_rssi_get(conn_handle, &rssi);
 			uhos_ble_gatts_mtu_get(conn_handle, &mtu);
-
 			LOGI("mtu is %d", mtu);
-			if (count == 0xFFFF) {
+			if (count == 0xFFF) {
 				uhos_ble_gap_disconnect(conn_handle);
 				count = 0;
 			}
-		}		
-		// uhos_ble_gap_scan_start(UHOS_BLE_SCAN_TYPE_ACTIVE, scan_param);
-		// sleep(10);
-		// uhos_ble_gap_scan_stop();
+		}
 	}
 
 	uhos_ble_gap_adv_stop();
