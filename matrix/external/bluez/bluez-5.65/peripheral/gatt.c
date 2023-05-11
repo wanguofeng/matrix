@@ -488,6 +488,9 @@ void bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, u
 {
 	struct gatt_conn *conn = queue_peek_head(conn_list);
 
+	LOGI("%s length = %d", __FUNCTION__, length);
+	LOG_HEXDUMP_DBG(value, length, "notification");
+
 	bt_gatt_server_send_notification(conn->gatt,
 					char_handle, value,
 					length, true);
@@ -496,6 +499,9 @@ void bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, u
 void bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uint16_t length)
 {
 	struct gatt_conn *conn = queue_peek_head(conn_list);
+
+	LOGI("%s length = %d", __FUNCTION__, length);
+	LOG_HEXDUMP_DBG(value, length, "indication");
 
 	bt_gatt_server_send_indication(conn->gatt,
 					char_handle, value,
