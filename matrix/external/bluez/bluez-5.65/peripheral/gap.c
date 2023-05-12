@@ -901,7 +901,7 @@ static void recv_cmd(int fd, uint32_t events, void *user_data)
 		return;
     }
 
-    LOGD("eventfd_read count = %ld", count);
+    // LOGD("eventfd_read count = %ld", count);
 
 	mgmt_send_async * mgmt_cmd = queue_pop_head(pending_cmd_list);
 	if (mgmt_cmd != NULL) {

@@ -359,7 +359,7 @@ static void gatt_descriptor_ccc_write_cb(struct gatt_db_attribute *attrib,
 done:
 	gatt_db_attribute_write_result(attrib, id, error);
 	
-	// free(param);
+	free(param);
 }
 // static void conf_cb(void *user_data)
 // {
@@ -445,7 +445,7 @@ static void gatt_character_read_cb(struct gatt_db_attribute *attrib,
 	// if (value != NULL)
 	// 	free(value);
 
-	// free(param);
+	free(param);
 }
 
 static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
@@ -481,7 +481,7 @@ static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
 done:
 	gatt_db_attribute_write_result(attrib, id, ecode);
 
-	// free(param);
+	free(param);
 }
 
 void bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, uint16_t length)
