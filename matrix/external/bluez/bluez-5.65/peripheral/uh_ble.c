@@ -47,7 +47,7 @@
 
 // #define Bluez_Adapter_Version     "v1.0.14-alpha-202305121355"
 
-#define Bluez_Adapter_Version     "v1.0.15-beta-202305121413"
+#define Bluez_Adapter_Version     "v1.0.21-beta-202305121622"
 // #define Bluez_Adapter_Version     "v1.1.0-rc"
 // #define Bluez_Adapter_Version     "v1.1.0-release"
 

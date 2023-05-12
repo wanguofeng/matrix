@@ -44,13 +44,13 @@ struct gatt_conn {
 	struct sockaddr_l2 addr;
 	struct bt_att *att;
 	struct bt_gatt_server *gatt;
-	struct bt_gatt_client *client;
+// 	struct bt_gatt_client *client;
 };
 
 static int att_fd = -1;
 static struct queue *conn_list = NULL;
 static struct gatt_db *gatt_db = NULL;
-static struct gatt_db *gatt_cache = NULL;
+// static struct gatt_db *gatt_cache = NULL;
 
 static uint8_t static_addr[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 static uint8_t dev_name[20];
@@ -84,7 +84,7 @@ static void gatt_conn_destroy(void *data)
 {
 	struct gatt_conn *conn = data;
 
-	bt_gatt_client_unref(conn->client);
+// 	bt_gatt_client_unref(conn->client);
 	bt_gatt_server_unref(conn->gatt);
 	bt_att_unref(conn->att);
 
@@ -143,19 +143,19 @@ static struct gatt_conn *gatt_conn_new(int fd)
 		return NULL;
 	}
 
-	conn->client = bt_gatt_client_new(gatt_cache, conn->att, mtu, 0);
-	if (!conn->client) {
-		fprintf(stderr, "Failed to create GATT client\n");
-		bt_gatt_server_unref(conn->gatt);
-		bt_att_unref(conn->att);
-		free(conn);
-		return NULL;
-	}
+	// conn->client = bt_gatt_client_new(gatt_cache, conn->att, mtu, 0);
+	// if (!conn->client) {
+	// 	fprintf(stderr, "Failed to create GATT client\n");
+	// 	bt_gatt_server_unref(conn->gatt);
+	// 	bt_att_unref(conn->att);
+	// 	free(conn);
+	// 	return NULL;
+	// }
 
-	bt_gatt_client_ready_register(conn->client, client_ready_callback,
-								conn, NULL);
-	bt_gatt_client_set_service_changed(conn->client,
-				client_service_changed_callback, conn, NULL);
+	// bt_gatt_client_ready_register(conn->client, client_ready_callback,
+	// 							conn, NULL);
+	// bt_gatt_client_set_service_changed(conn->client,
+	// 			client_service_changed_callback, conn, NULL);
 
 	return conn;
 }
@@ -333,12 +333,12 @@ static void gatt_descriptor_ccc_write_cb(struct gatt_db_attribute *attrib,
 		goto done;
 	}
 
-	if (value[0] == 0x00)
-		svc_chngd_enabled = false;
-	else if (value[0] == 0x02)
-		svc_chngd_enabled = true;
-	else
-		error = 0x80;
+	// if (value[0] == 0x00)
+	// 	svc_chngd_enabled = false;
+	// else if (value[0] == 0x02)
+	// 	svc_chngd_enabled = true;
+	// else
+	// 	error = 0x80;
 
 	uint16_t handle = gatt_db_attribute_get_handle(attrib);
 	LOGD("%s handle = %04x", __FUNCTION__, handle);
@@ -488,19 +488,21 @@ void bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, u
 {
 	struct gatt_conn *conn = queue_peek_head(conn_list);
 
-	LOGI("%s length = %d", __FUNCTION__, length);
+	LOGI("%s handle = %04x, length = %d", __FUNCTION__, char_handle, length);
+	
 	LOG_HEXDUMP_DBG(value, length, "notification");
 
 	bt_gatt_server_send_notification(conn->gatt,
 					char_handle, value,
-					length, true);
+					length, false);
 }
 
 void bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uint16_t length)
 {
 	struct gatt_conn *conn = queue_peek_head(conn_list);
 
-	LOGI("%s length = %d", __FUNCTION__, length);
+	LOGI("%s handle = %04x, length = %d", __FUNCTION__, char_handle, length);
+
 	LOG_HEXDUMP_DBG(value, length, "indication");
 
 	bt_gatt_server_send_indication(conn->gatt,
@@ -693,7 +695,8 @@ void bluez_gatts_server_start(void)
 		return;
 	}
 
-	gatt_cache = gatt_db_new();
+	// gatt_cache = gatt_db_new();
+
 	conn_list = queue_new();
 	if (!conn_list) {
 		LOGE("create conn_list failed");
@@ -723,8 +726,8 @@ void bluez_gatts_server_stop(void)
 
 	queue_destroy(conn_list, gatt_conn_destroy);
 
-	gatt_db_unref(gatt_cache);
-	gatt_cache = NULL;
+	// gatt_db_unref(gatt_cache);
+	// gatt_cache = NULL;
 
 	gatt_db_unref(gatt_db);
 	gatt_db = NULL;
