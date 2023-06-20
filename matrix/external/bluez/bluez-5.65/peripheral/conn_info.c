@@ -159,10 +159,10 @@ uint8_t conn_info_get_role_by_addr(const struct addr_info bdaddr)
 	struct conn_info * cp = queue_find(gattc_conn_list, match_by_addr,
 							&temp);
 	if (cp != NULL) {
-		return BLE_GAP_PERIPHERAL;
+		return BLE_GAP_CENTRAL;
 	}
 
-	return BLE_GAP_CENTRAL;
+	return BLE_GAP_PERIPHERAL;
 }
 
 uint8_t conn_info_get_role_by_handle(uint16_t conn_handle)
