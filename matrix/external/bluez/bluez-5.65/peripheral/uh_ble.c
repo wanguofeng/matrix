@@ -72,10 +72,13 @@ static void signal_callback(int signum, void *user_data)
 	}
 }
 
+#define VERSION "5.65"
+
 static void * bluez_daemon(void *arg)
 {
-	int exit_status = 0;
+    int exit_status = 0;
     uint16_t hci_index = *(uint16_t *) arg;
+
 
     LOGW("Bluetooth periperhal ver %s, hci_index = %d", VERSION, hci_index);
     LOGW("Bluetooth Adapter Version %s", Bluez_Adapter_Version);
@@ -608,6 +611,63 @@ uhos_ble_status_t uhos_ble_gattc_write_cmd(
     uhos_u16 handle,
     uhos_u8 *p_value,
     uhos_u8 len)
+{
+    return UHOS_BLE_SUCCESS;
+}
+
+uhos_ble_status_t uhos_ble_gap_white_list_add(uhos_u8 *mac)
+{
+
+    return UHOS_BLE_SUCCESS;
+}
+
+uhos_ble_status_t uhos_ble_gap_white_list_remove(uhos_u8 *mac)
+{
+    return UHOS_BLE_SUCCESS;
+}
+
+uhos_ble_status_t uhos_ble_gap_white_list_clear(void)
+{
+
+    return UHOS_BLE_SUCCESS;
+}
+
+/**
+ * @brief       取消连接
+ * @return      uhos_ble_status_t
+ */
+uhos_ble_status_t uhos_ble_gap_cancel_connection(void)
+{
+    return UHOS_BLE_SUCCESS;
+}
+
+
+uhos_ble_status_t uhos_ble_gattc_write_without_rsp(uhos_u16 conn_handle, uhos_u16 char_value_handle, uhos_u8 *p_value, uhos_u16 len)
+{
+    return UHOS_BLE_SUCCESS;
+}
+
+uhos_ble_status_t uhos_ble_gattc_exchange_mtu(uhos_u16 conn_handle, uhos_u16 mtu)
+{
+    return UHOS_BLE_SUCCESS;
+}
+
+uhos_ble_status_t uhos_ble_gattc_mtu_get(uhos_u16 conn_handle, uhos_u16 *mtu_size)
+{
+    return UHOS_BLE_SUCCESS;
+}
+
+uhos_ble_status_t uhos_ble_gattc_primary_service_discover_all(uhos_u16 conn_handle, void *req)
+{
+    return UHOS_BLE_SUCCESS;
+}
+
+uhos_ble_status_t uhos_ble_gattc_char_discover_of_service(uhos_u16 conn_handle, uhos_ble_handle_range_t *char_handle_range)
+{
+    return UHOS_BLE_SUCCESS;
+}
+
+uhos_ble_status_t uhos_ble_gattc_read_char_value(uhos_u16 conn_handle, uhos_u16 char_value_handle)
 {
     return UHOS_BLE_SUCCESS;
 }
