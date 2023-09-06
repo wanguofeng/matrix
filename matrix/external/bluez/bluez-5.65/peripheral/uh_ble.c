@@ -47,7 +47,7 @@
 
 // #define Bluez_Adapter_Version     "v1.0.14-alpha-202305121355"
 
-#define Bluez_Adapter_Version     "v1.0.22-beta-202306201419"
+#define Bluez_Adapter_Version     "v1.0.23-rc-20230901"
 // #define Bluez_Adapter_Version     "v1.1.0-rc"
 // #define Bluez_Adapter_Version     "v1.1.0-release"
 
@@ -500,6 +500,7 @@ uhos_ble_status_t uhos_ble_gatts_callback_register(uhos_ble_gatts_cb_t cb)
 static uhos_ble_status_t uhos_ble_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 {
     bluez_gatts_add_service(p_srv_db);
+    return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gatts_service_set(uhos_ble_gatts_db_t *uhos_ble_service_database)

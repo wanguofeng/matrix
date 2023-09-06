@@ -21,7 +21,11 @@
 #include <unistd.h>
 #include <errno.h>
 
+
 #include "lib/bluetooth.h"
+#include "lib/hci.h"
+#include "lib/hci_lib.h"
+
 #include "lib/mgmt.h"
 #include "src/shared/mgmt.h"
 #include "peripheral/gatt.h"
@@ -51,16 +55,21 @@ static bool adv_instances = false;
 static bool require_connectable = true;
 static unsigned int discovery_id = -1;
 
-static uint8_t static_addr[6] = { 0x00 };
+static uint8_t static_addr[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0 };
+static uint8_t public_addr[6] = { 0x00};
 static uint8_t dev_name[260] = { 0x00, };
 static uint8_t dev_name_len = 0;
 
 static uint8_t g_adv_type = 0;
+static uint16_t g_min_interval = 0;
+static uint16_t g_max_interval = 0;
 static uint8_t g_adv_running = false;
 static uint8_t g_adv_data[ADV_MAX_LENGTH] = {0x00};
 static uint8_t g_adv_data_len = 0;
 static uint8_t g_scan_rsp[ADV_MAX_LENGTH] = {0x00};
 static uint8_t g_scan_rsp_len = 0;
+
+static bool mgmt_low_version = false;
 
 static bluez_gap_event_callback_func g_event_cb = NULL;
 static bluez_gap_cmd_callback_func g_cmd_cb = NULL;
@@ -319,8 +328,12 @@ static void read_sysconfig_rsp(uint8_t status, uint16_t len, const void *param,
 	struct mgmt_tlv_list *tlv_list;
 
 	if (status != 0) {
-		LOGE("Read system configuration failed with status "
+		LOGW("Read system configuration failed with status "
 				"0x%02x (%s)", status, mgmt_errstr(status));
+		LOGW("Using hci_lib interface.");
+
+		mgmt_low_version = true;
+		cmd_callback(MGMT_OP_READ_DEF_SYSTEM_CONFIG, status, len, param, user_data);
 		return;
 	}
 
@@ -409,7 +422,7 @@ static void read_info_complete(uint8_t status, uint16_t len,
 	current_settings = le32_to_cpu(rp->current_settings);
 
 	if ((supported_settings & required_settings) != required_settings) {
-		LOGE("index %d doesn't support BLE Features ", index);
+		LOGW("index %d doesn't support BLE Features ", index);
 		return;
 	}
 
@@ -422,7 +435,17 @@ static void read_info_complete(uint8_t status, uint16_t len,
 
 	mgmt_index = index;
 
-	memcpy(static_addr, (uint8_t *)&rp->bdaddr, 6);
+	memcpy(public_addr, (uint8_t *)&rp->bdaddr, 6);
+
+	static_addr[0] = rand();
+	static_addr[1] = rand();
+	static_addr[2] = rand();
+	static_addr[3] = rand();
+	static_addr[4] = rand();
+	static_addr[5] = 0xc0;
+
+	LOGD("generate static addr %02x:%02x:%02x:%02x:%02x:%02x\n", static_addr[5], static_addr[4], static_addr[3],
+													  static_addr[2], static_addr[1], static_addr[0]);
 
 	mgmt_register(mgmt, MGMT_EV_NEW_SETTINGS, index,
 					new_settings_event, NULL, NULL);
@@ -929,7 +952,288 @@ static void recv_cmd(int fd, uint32_t events, void *user_data)
 			return;
 	}
 }
+static int hci_if_reset_controller()
+{
+	int device_id = hci_get_route(NULL);
 
+	int device_handle = 0;
+	
+	if((device_handle = hci_open_dev(device_id)) < 0)
+	{
+		LOGE("Could not open device");
+		return 1;
+	}
+
+	uint8_t status;
+	struct hci_request rq;
+	uint8_t data_length = 0;
+	memset(&rq, 0, sizeof(rq));
+
+	// Reset Controller
+	rq.ogf = OGF_HOST_CTL;
+	rq.ocf = OCF_RESET;
+	rq.cparam = NULL;
+	rq.clen = 0;
+	rq.rparam = &status;
+	rq.rlen = 1;
+
+	int ret = hci_send_req(device_handle, &rq, 1000);
+
+	if(ret < 0)
+	{
+		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
+		hci_close_dev(device_handle);
+		return(1);
+	}
+
+	if (status) 
+	{
+		LOGE("LE set advertise returned status %d\n", status);
+		hci_close_dev(device_handle);
+		return(1);
+	}
+
+	bdaddr_t bdaddr;
+	char addr[18];
+
+	hci_read_bd_addr(device_handle, &bdaddr, 10000);
+	ba2str(&bdaddr, addr);
+	LOGW("Controller bdaddr(%s)", addr);
+
+	memcpy(static_addr, (uint8_t *)&bdaddr, 6);
+
+	hci_close_dev(device_handle);
+	
+	return 0;
+}
+
+
+static void hci_if_set_random_address(uint8_t *addr)
+{
+	int device_id = hci_get_route(NULL);
+	uint8_t status;
+	struct hci_request rq;
+	int device_handle = 0;
+
+	if((device_handle = hci_open_dev(device_id)) < 0)
+	{
+		LOGE("Could not open device");
+		return;
+	}
+
+    le_set_random_address_cp cp;
+
+	memset(&rq, 0, sizeof(rq));
+    memset(&cp, 0, sizeof(cp)); 
+    memcpy(cp.bdaddr.b, addr, 6); 
+    memset(&rq, 0, sizeof(rq)); 
+    rq.ogf = OGF_LE_CTL; 
+    rq.ocf = OCF_LE_SET_RANDOM_ADDRESS; 
+    rq.cparam = &cp; 
+    rq.clen = LE_SET_RANDOM_ADDRESS_CP_SIZE; 
+    rq.rparam = &status; 
+    rq.rlen = 1; 
+
+	int ret = hci_send_req(device_handle, &rq, 1000);
+
+    if (status || ret < 0) 
+    { 
+        hci_close_dev(device_handle);
+		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
+		return;
+    } 
+}
+
+static void hci_if_set_adv_data(uint8_t * adv_data, uint8_t adv_len,
+									uint8_t * scan_rsp, uint8_t scan_rsp_len)
+{
+	int device_id = hci_get_route(NULL);
+
+	int device_handle = 0;
+	
+	if((device_handle = hci_open_dev(device_id)) < 0)
+	{
+		LOGE("Could not open device");
+		return;
+	}
+
+	uint8_t status;
+	struct hci_request rq;
+	uint8_t data_length = 0;
+	memset(&rq, 0, sizeof(rq));
+
+	// Setup advertising data
+	le_set_advertising_data_cp adv_data_cp;
+	memset(&adv_data_cp, 0, sizeof(adv_data_cp));
+	memcpy(adv_data_cp.data, adv_data, adv_len);
+
+	adv_data_cp.length = adv_len;
+
+	LOGD("adv data[%d]: ", adv_data_cp.length);
+	for (uint8_t i = 0; i < adv_data_cp.length; i ++) {
+		printf("%02x ", adv_data_cp.data[i]);
+	}
+	printf("\r\n");
+
+	memset(&rq, 0, sizeof(rq));
+	rq.ogf = OGF_LE_CTL;
+	rq.ocf = OCF_LE_SET_ADVERTISING_DATA;
+	rq.cparam = &adv_data_cp;
+	rq.clen = 32;
+	rq.rparam = &status;
+	rq.rlen = 1;
+
+	int ret = hci_send_req(device_handle, &rq, 1000);
+
+	if(ret < 0)
+	{
+		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
+		hci_close_dev(device_handle);
+		return(1);
+	}
+
+	if (status) 
+	{
+		LOGE("LE set advertise returned status %d\n", status);
+		hci_close_dev(device_handle);
+		return(1);
+	}
+
+	// Setup scan response data
+	le_set_scan_response_data_cp scan_data_cp;
+	memset(&scan_data_cp, 0, sizeof(scan_data_cp));
+	memcpy(scan_data_cp.data, scan_rsp, scan_rsp_len);
+	scan_data_cp.length = scan_rsp_len;
+
+	LOGD("scan response data[%d]:", scan_data_cp.length);
+	for (uint8_t i = 0; i < scan_data_cp.length; i ++) {
+		printf("%02x ", scan_data_cp.data[i]);
+	}
+	printf("\r\n");
+
+	memset(&rq, 0, sizeof(rq));
+	rq.ogf = OGF_LE_CTL;
+	rq.ocf = OCF_LE_SET_SCAN_RESPONSE_DATA;
+	rq.cparam = &scan_data_cp;
+	rq.clen = LE_SET_SCAN_RESPONSE_DATA_CP_SIZE;
+	rq.rparam = &status;
+	rq.rlen = 1;
+
+	ret = hci_send_req(device_handle, &rq, 1000);
+
+	if(ret < 0)
+	{
+		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
+		hci_close_dev(device_handle);
+		return(1);
+	}
+
+	if (status) 
+	{
+		LOGE("LE set scan response returned status %d\n", status);
+		hci_close_dev(device_handle);
+		return(1);
+	}
+
+	hci_close_dev(device_handle);
+}
+
+static void hci_if_set_adv_start(uint8_t adv_type, uint16_t max_interval, uint16_t min_interval)
+{
+	int device_id = hci_get_route(NULL);
+
+	int device_handle = 0;
+	if((device_handle = hci_open_dev(device_id)) < 0)
+	{
+		LOGE("Could not open device");
+		return;
+	}
+
+	le_set_advertising_parameters_cp adv_params_cp;
+	memset(&adv_params_cp, 0, sizeof(adv_params_cp));
+
+	adv_params_cp.max_interval = (htobs(max_interval) * 16 / 10);
+	adv_params_cp.min_interval = (htobs(min_interval) * 16 / 10);
+	adv_params_cp.chan_map = 7;
+	adv_params_cp.advtype = adv_type;
+
+	uint8_t status;
+	struct hci_request rq;
+	memset(&rq, 0, sizeof(rq));
+	rq.ogf = OGF_LE_CTL;
+	rq.ocf = OCF_LE_SET_ADVERTISING_PARAMETERS;
+	rq.cparam = &adv_params_cp;
+	rq.clen = LE_SET_ADVERTISING_PARAMETERS_CP_SIZE;
+	rq.rparam = &status;
+	rq.rlen = 1;
+
+	int ret = hci_send_req(device_handle, &rq, 1000);
+	if (ret < 0)
+	{
+		hci_close_dev(device_handle);
+		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
+		return;
+	}
+
+	le_set_advertise_enable_cp advertise_cp;
+	memset(&advertise_cp, 0, sizeof(advertise_cp));
+	advertise_cp.enable = 0x01;
+
+	memset(&rq, 0, sizeof(rq));
+	rq.ogf = OGF_LE_CTL;
+	rq.ocf = OCF_LE_SET_ADVERTISE_ENABLE;
+	rq.cparam = &advertise_cp;
+	rq.clen = LE_SET_ADVERTISE_ENABLE_CP_SIZE;
+	rq.rparam = &status;
+	rq.rlen = 1;
+
+	ret = hci_send_req(device_handle, &rq, 1000);
+
+	if (ret < 0)
+	{
+		hci_close_dev(device_handle);
+		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
+		return;
+	}
+}
+
+static void hci_if_set_adv_stop()
+{
+	int device_id = hci_get_route(NULL);
+
+	int device_handle = 0;
+	if((device_handle = hci_open_dev(device_id)) < 0)
+	{
+		LOGE("Could not open device");
+		return;
+	}
+
+	uint8_t status;
+	struct hci_request rq;
+	memset(&rq, 0, sizeof(rq));
+	int ret;
+
+	le_set_advertise_enable_cp advertise_cp;
+	memset(&advertise_cp, 0, sizeof(advertise_cp));
+	advertise_cp.enable = 0x00;
+
+	memset(&rq, 0, sizeof(rq));
+	rq.ogf = OGF_LE_CTL;
+	rq.ocf = OCF_LE_SET_ADVERTISE_ENABLE;
+	rq.cparam = &advertise_cp;
+	rq.clen = LE_SET_ADVERTISE_ENABLE_CP_SIZE;
+	rq.rparam = &status;
+	rq.rlen = 1;
+
+	ret = hci_send_req(device_handle, &rq, 1000);
+
+	if (ret < 0)
+	{
+		hci_close_dev(device_handle);
+		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
+		return;
+	}
+}
 void bluez_gap_set_adv_data(uint8_t const * adv, uint8_t adv_len, uint8_t const * scan_rsp, uint8_t scan_rsp_len) 
 {
 	memset(g_adv_data, 0x00, ADV_MAX_LENGTH);
@@ -951,6 +1255,11 @@ void bluez_gap_set_adv_data(uint8_t const * adv, uint8_t adv_len, uint8_t const 
 		g_scan_rsp_len = scan_rsp_len_t;
 	}
 
+	if (mgmt_low_version) {
+		hci_if_set_adv_data(g_adv_data, g_adv_data_len, g_scan_rsp, g_scan_rsp_len);
+		return;
+	}
+
 	if (g_adv_running == true) {
 		/* advertising is running, only update adv data */
 		advertising_add_adv(g_adv_type, 0x01, g_adv_data, g_adv_data_len, g_scan_rsp, g_scan_rsp_len);
@@ -961,6 +1270,13 @@ void bluez_gap_set_adv_start(uint8_t adv_type, uint16_t max_interval, uint16_t m
 {
 	LOGD("%s(%02x) max_interval(%02x) min_interval(%02x)", 
 								get_adv_pdu_type(adv_type), adv_type, max_interval, min_interval);
+	g_adv_type = adv_type;
+	g_min_interval = min_interval;
+	g_max_interval = max_interval;
+	if (mgmt_low_version) {
+		hci_if_set_adv_start(adv_type, max_interval, min_interval);
+		return;
+	}
 
 	advertising_set_adv_param(max_interval, min_interval);
 	advertising_add_adv(adv_type, 0x01, g_adv_data, g_adv_data_len, g_scan_rsp, g_scan_rsp_len);
@@ -968,12 +1284,21 @@ void bluez_gap_set_adv_start(uint8_t adv_type, uint16_t max_interval, uint16_t m
 
 void bluez_gap_set_adv_stop()
 {
+	if (mgmt_low_version) {
+		hci_if_set_adv_stop();
+		return;
+	}
 	advertising_add_empty_adv(g_adv_type, 0x01);
 	advertising_rm_adv(0x01);
 }
 
 void bluez_gap_set_adv_restart()
 {
+	if (mgmt_low_version) {
+		hci_if_set_adv_stop();
+		hci_if_set_adv_start(g_adv_type, g_max_interval, g_min_interval);
+		return;
+	}
 	advertising_add_empty_adv(g_adv_type, 0x01);
 	advertising_rm_adv(0x01);
 	advertising_add_adv(g_adv_type, 0x01, g_adv_data, g_adv_data_len, g_scan_rsp, g_scan_rsp_len);
@@ -995,7 +1320,7 @@ void bluez_gap_get_address(uint8_t addr[6])
 {
 	if (mgmt_index == MGMT_INDEX_NONE)
 		return;
-	memcpy(addr, static_addr, sizeof(static_addr));
+	memcpy(addr, public_addr, sizeof(public_addr));
 }
 
 void bluez_gap_disconnect(const bdaddr_t *bdaddr, uint8_t bdaddr_type)
@@ -1078,7 +1403,7 @@ void bluez_gap_adapter_init(uint16_t hci_index)
 	pending_cmd_list = queue_new();
 	pending_cmd_tlv_list = queue_new();
 	event_fd = eventfd(0, EFD_SEMAPHORE|EFD_NONBLOCK);
-	LOGW("event_fd = %d", event_fd);
+	// LOGW("event_fd = %d", event_fd);
 
 	if (!mgmt_send(mgmt, MGMT_OP_READ_VERSION,
 				MGMT_INDEX_NONE, 0, NULL,

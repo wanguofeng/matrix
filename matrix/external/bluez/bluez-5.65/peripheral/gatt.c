@@ -71,7 +71,7 @@ void bluez_gatts_register_callback(bluez_gatts_event_callback_func func)
 
 void bluez_gatts_set_static_address(uint8_t addr[6])
 {
-	memcpy(static_addr, addr, sizeof(static_addr));
+	memcpy(static_addr, addr, 6);
 }
 
 void bluez_gatts_set_device_name(uint8_t name[20], uint8_t len)
@@ -235,7 +235,7 @@ static void populate_gap_service(struct gatt_db *db)
 	bt_uuid16_create(&uuid, UUID_GAP);
 	service = gatt_db_add_service(db, &uuid, true, 6);
 
-	LOGE("gap service handle = %04x", gatt_db_attribute_get_handle(service));
+	LOGD("gap service handle = %04x", gatt_db_attribute_get_handle(service));
 
 	bt_uuid16_create(&uuid, GATT_CHARAC_DEVICE_NAME);
 	device_name = gatt_db_service_add_characteristic(service, &uuid,
@@ -243,7 +243,7 @@ static void populate_gap_service(struct gatt_db *db)
 					BT_GATT_CHRC_PROP_READ,
 					gap_device_name_read, NULL, NULL);
 
-	LOGE("gap device_name handle = %04x", gatt_db_attribute_get_handle(device_name));
+	LOGD("gap device_name handle = %04x", gatt_db_attribute_get_handle(device_name));
 
 	gatt_db_service_set_active(service, true);
 }
@@ -387,7 +387,7 @@ static void populate_gatt_service(struct gatt_db *db)
 	bt_uuid16_create(&uuid, 0x1801);
 	service = gatt_db_add_service(db, &uuid, true, 4);
 
-	LOGE("gatt service handle = %04x", gatt_db_attribute_get_handle(service));
+	LOGD("gatt service handle = %04x", gatt_db_attribute_get_handle(service));
 
 	bt_uuid16_create(&uuid, GATT_CHARAC_SERVICE_CHANGED);
 	svc_chngd = gatt_db_service_add_characteristic(service, &uuid,
@@ -398,7 +398,7 @@ static void populate_gatt_service(struct gatt_db *db)
 
 	gatt_svc_chngd_handle = gatt_db_attribute_get_handle(svc_chngd);
 
-	LOGE("gatt_svc_chngd_handle = %04x", gatt_svc_chngd_handle);
+	LOGD("gatt_svc_chngd_handle = %04x", gatt_svc_chngd_handle);
 
 	bt_uuid16_create(&uuid, GATT_CLIENT_CHARAC_CFG_UUID);
 	cccd = gatt_db_service_add_descriptor(service, &uuid,
@@ -561,7 +561,7 @@ void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 
 	p_srv_db->srv_handle = gatt_db_attribute_get_handle(service);
 
-	LOGE("gatt service handle = %04x", p_srv_db->srv_handle);
+	LOGI("gatt service handle = %04x", p_srv_db->srv_handle);
 
 	for (int i = 0; i < p_srv_db->char_num; i ++) {
 

@@ -81,7 +81,7 @@ int main(int argc, char *argv[])
 	uhos_ble_enable();
 	uhos_u8 static_addr[6] = {0x00};
 	uhos_ble_address_get(static_addr);
-	LOGD("Using static address %02x:%02x:%02x:%02x:%02x:%02x\n",
+	LOGD("Using Public Address %02x:%02x:%02x:%02x:%02x:%02x\n",
 								static_addr[5], static_addr[4], static_addr[3],
 								static_addr[2], static_addr[1], static_addr[0]);
 
