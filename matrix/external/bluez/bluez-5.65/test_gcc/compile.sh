@@ -26,7 +26,7 @@ $CC -c ../src/shared/mgmt.c -g -o mgmt.o -I ../
 $CC -c ../src/shared/crypto.c -g -o crypto.o -I ../
 $CC -c ../src/shared/ecc.c -g -o ecc.o -I ../
 $CC -c ../src/shared/ringbuf.c -g -o ringbuf.o -I ../
-#$CC -c ../src/shared/hci.c -g -o hci.o -I ../
+$CC -c ../src/shared/hci.c -g -o shared-hci.o -I ../
 $CC -c ../src/shared/hci-crypto.c -g -o hci-crypto.o -I ../
 # $CC -c ../src/shared/ad.c -g -o ad.o -I ../
 $CC -c ../src/shared/att.c -g -o att.o -I ../
@@ -48,6 +48,7 @@ $CC -c ../peripheral/conn_info.c -g -o peripheral-conn_info.o -I ../peripheral/ 
 
 $AR crv libbt-bluez-adapter.a *.o
 
+$CC ../peripheral/main.c -o bt_test -L. -lbt-bluez-adapter -I ../peripheral -I ../ -D VERSION="5.54"
 
 # shared library
 #$CC -c -fPIC ../lib/bluetooth.c -o bluetooth.o
