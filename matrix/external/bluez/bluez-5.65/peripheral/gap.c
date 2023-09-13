@@ -55,7 +55,7 @@ static bool adv_instances = false;
 static bool require_connectable = true;
 static unsigned int discovery_id = -1;
 
-static uint8_t static_addr[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0 };
+static uint8_t static_addr[6] = { 0x90, 0x78, 0x56, 0x34, 0x12, 0xc0 };
 static uint8_t public_addr[6] = { 0x00};
 static uint8_t dev_name[260] = { 0x00, };
 static uint8_t dev_name_len = 0;
@@ -73,6 +73,10 @@ static bool mgmt_low_version = false;
 
 static bluez_gap_event_callback_func g_event_cb = NULL;
 static bluez_gap_cmd_callback_func g_cmd_cb = NULL;
+
+
+static int hci_bt_if_reset_controller();
+static void hci_bt_if_set_random_address(uint8_t *addr);
 
 static void recv_cmd(int fd, uint32_t events, void *user_data);
 
@@ -333,7 +337,13 @@ static void read_sysconfig_rsp(uint8_t status, uint16_t len, const void *param,
 		LOGW("Using hci_lib interface.");
 
 		mgmt_low_version = true;
+		mgmt_unref(mgmt);
+
+		hci_bt_if_reset_controller();
+		hci_bt_if_set_random_address(static_addr);
+
 		cmd_callback(MGMT_OP_READ_DEF_SYSTEM_CONFIG, status, len, param, user_data);
+
 		return;
 	}
 
@@ -431,13 +441,13 @@ static void read_info_complete(uint8_t status, uint16_t len,
 		return;
 	}
 
-	LOGD("Selecting index %u", index);
+	LOGI("Selecting index %u", index);
 
 	mgmt_index = index;
 
 	memcpy(public_addr, (uint8_t *)&rp->bdaddr, 6);
 
-	static_addr[0] = rand();
+	static_addr[0] = rand(); 
 	static_addr[1] = rand();
 	static_addr[2] = rand();
 	static_addr[3] = rand();
@@ -952,7 +962,8 @@ static void recv_cmd(int fd, uint32_t events, void *user_data)
 			return;
 	}
 }
-static int hci_if_reset_controller()
+
+static int hci_bt_if_reset_controller()
 {
 	int device_id = hci_get_route(NULL);
 
@@ -1000,15 +1011,14 @@ static int hci_if_reset_controller()
 	ba2str(&bdaddr, addr);
 	LOGW("Controller bdaddr(%s)", addr);
 
-	memcpy(static_addr, (uint8_t *)&bdaddr, 6);
+	memcpy(public_addr, (uint8_t *)&bdaddr, 6);
 
 	hci_close_dev(device_handle);
 	
 	return 0;
 }
 
-
-static void hci_if_set_random_address(uint8_t *addr)
+static void hci_bt_if_set_random_address(uint8_t *addr)
 {
 	int device_id = hci_get_route(NULL);
 	uint8_t status;
@@ -1044,7 +1054,7 @@ static void hci_if_set_random_address(uint8_t *addr)
     } 
 }
 
-static void hci_if_set_adv_data(uint8_t * adv_data, uint8_t adv_len,
+static void hci_bt_if_set_adv_data(uint8_t * adv_data, uint8_t adv_len,
 									uint8_t * scan_rsp, uint8_t scan_rsp_len)
 {
 	int device_id = hci_get_route(NULL);
@@ -1138,7 +1148,7 @@ static void hci_if_set_adv_data(uint8_t * adv_data, uint8_t adv_len,
 	hci_close_dev(device_handle);
 }
 
-static void hci_if_set_adv_start(uint8_t adv_type, uint16_t max_interval, uint16_t min_interval)
+static void hci_bt_if_set_adv_start(uint8_t adv_type, uint16_t max_interval, uint16_t min_interval)
 {
 	int device_id = hci_get_route(NULL);
 
@@ -1197,7 +1207,7 @@ static void hci_if_set_adv_start(uint8_t adv_type, uint16_t max_interval, uint16
 	}
 }
 
-static void hci_if_set_adv_stop()
+static void hci_bt_if_set_adv_stop()
 {
 	int device_id = hci_get_route(NULL);
 
@@ -1256,7 +1266,7 @@ void bluez_gap_set_adv_data(uint8_t const * adv, uint8_t adv_len, uint8_t const 
 	}
 
 	if (mgmt_low_version) {
-		hci_if_set_adv_data(g_adv_data, g_adv_data_len, g_scan_rsp, g_scan_rsp_len);
+		hci_bt_if_set_adv_data(g_adv_data, g_adv_data_len, g_scan_rsp, g_scan_rsp_len);
 		return;
 	}
 
@@ -1274,7 +1284,7 @@ void bluez_gap_set_adv_start(uint8_t adv_type, uint16_t max_interval, uint16_t m
 	g_min_interval = min_interval;
 	g_max_interval = max_interval;
 	if (mgmt_low_version) {
-		hci_if_set_adv_start(adv_type, max_interval, min_interval);
+		hci_bt_if_set_adv_start(adv_type, max_interval, min_interval);
 		return;
 	}
 
@@ -1285,7 +1295,7 @@ void bluez_gap_set_adv_start(uint8_t adv_type, uint16_t max_interval, uint16_t m
 void bluez_gap_set_adv_stop()
 {
 	if (mgmt_low_version) {
-		hci_if_set_adv_stop();
+		hci_bt_if_set_adv_stop();
 		return;
 	}
 	advertising_add_empty_adv(g_adv_type, 0x01);
@@ -1295,8 +1305,8 @@ void bluez_gap_set_adv_stop()
 void bluez_gap_set_adv_restart()
 {
 	if (mgmt_low_version) {
-		hci_if_set_adv_stop();
-		hci_if_set_adv_start(g_adv_type, g_max_interval, g_min_interval);
+		hci_bt_if_set_adv_stop();
+		hci_bt_if_set_adv_start(g_adv_type, g_max_interval, g_min_interval);
 		return;
 	}
 	advertising_add_empty_adv(g_adv_type, 0x01);
@@ -1387,30 +1397,47 @@ void bluez_gap_register_callback(bluez_gap_cmd_callback_func cmd_cb, bluez_gap_e
 
 void bluez_gap_init(void)
 {
-	mgmt = mgmt_new_default();
-	if (!mgmt) {
-		LOGE("Failed to open management socket");
-		return;
-	}
+	mgmt_low_version = true;
+
+	static_addr[0] = rand(); 
+	static_addr[1] = rand();
+	static_addr[2] = rand();
+	static_addr[3] = rand();
+	static_addr[4] = rand();
+	static_addr[5] = 0xc0;
+
+	LOGD("generate static addr %02x:%02x:%02x:%02x:%02x:%02x\n", static_addr[5], static_addr[4], static_addr[3],
+				static_addr[2], static_addr[1], static_addr[0]);
+
+	bluez_gatts_set_static_address(static_addr);
+
+	hci_bt_if_reset_controller();
+	hci_bt_if_set_random_address(static_addr);
+
+	// mgmt = mgmt_new_default();
+	// if (!mgmt) {
+	// 	LOGE("Failed to open management socket");
+	// 	return;
+	// }
 
 	return ;
 }
 
 void bluez_gap_adapter_init(uint16_t hci_index)
 {
-	mgmt_index = hci_index;
+	// mgmt_index = hci_index;
 
-	pending_cmd_list = queue_new();
-	pending_cmd_tlv_list = queue_new();
-	event_fd = eventfd(0, EFD_SEMAPHORE|EFD_NONBLOCK);
-	// LOGW("event_fd = %d", event_fd);
+	// pending_cmd_list = queue_new();
+	// pending_cmd_tlv_list = queue_new();
+	// event_fd = eventfd(0, EFD_SEMAPHORE|EFD_NONBLOCK);
+	// // LOGW("event_fd = %d", event_fd);
 
-	if (!mgmt_send(mgmt, MGMT_OP_READ_VERSION,
-				MGMT_INDEX_NONE, 0, NULL,
-				read_version_complete, NULL, NULL)) {
-		LOGE("Failed to read version");
-		return;
-	}
+	// if (!mgmt_send(mgmt, MGMT_OP_READ_VERSION,
+	// 			MGMT_INDEX_NONE, 0, NULL,
+	// 			read_version_complete, NULL, NULL)) {
+	// 	LOGE("Failed to read version");
+	// 	return;
+	// }
 }
 
 void bluez_gap_uinit(void)

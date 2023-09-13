@@ -406,7 +406,7 @@ static void populate_gatt_service(struct gatt_db *db)
 				gatt_svc_chngd_ccc_read_cb,
 				gatt_svc_chngd_ccc_write_cb, NULL);
 
-	LOGE("cccd handle = %04x", gatt_db_attribute_get_handle(cccd));
+	LOGD("cccd handle = %04x", gatt_db_attribute_get_handle(cccd));
 
 	gatt_db_service_set_active(service, true);
 }
@@ -658,10 +658,12 @@ void bluez_gatts_server_start(void)
 	memset(&addr, 0, sizeof(addr));
 	addr.l2_family = AF_BLUETOOTH;
 	addr.l2_cid = htobs(ATT_CID);
+	// memset(static_addr, 0x00, 6);
 	memcpy(&addr.l2_bdaddr, static_addr, 6);
+
 	addr.l2_bdaddr_type = BDADDR_LE_RANDOM;
-	
-	LOGD("bind addr %02x:%02x:%02x:%02x:%02x:%02x\n", static_addr[5], static_addr[4], static_addr[3],
+
+	LOGI("bind addr %02x:%02x:%02x:%02x:%02x:%02x\n", static_addr[5], static_addr[4], static_addr[3],
 													  static_addr[2], static_addr[1], static_addr[0]);
 	
 	if (bind(att_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
@@ -705,7 +707,7 @@ void bluez_gatts_server_start(void)
 		return;
 	}
 
-#if 0
+#if 1
 	if (gatt_db != NULL) {
 		// populate_devinfo_service(gatt_db);
 		populate_gap_service(gatt_db);

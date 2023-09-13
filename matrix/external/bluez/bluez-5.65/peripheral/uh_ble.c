@@ -86,6 +86,9 @@ static void * bluez_daemon(void *arg)
 	mainloop_init();
 	bluez_gap_init();
     bluez_gap_adapter_init(hci_index);
+    bluez_gatts_server_start();
+
+    sem_post(&bluez_adapter_sem);
 
     exit_status = mainloop_run_with_signal(signal_callback, NULL);
 
@@ -286,7 +289,7 @@ uhos_ble_status_t uhos_ble_enable(void)
     }
 
     sem_wait(&bluez_adapter_sem);
-    bluez_gatts_server_start();
+
     LOGI("create bluez_daemon success!");
     return UHOS_BLE_SUCCESS;
 }
