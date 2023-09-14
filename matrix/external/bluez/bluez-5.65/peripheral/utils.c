@@ -6,7 +6,7 @@
 #include "peripheral/utils.h"
 #include "lib/mgmt.h"
 
-#define CONFIG_LOG_TAG "Bluez_Stack/Utils"
+#define CONFIG_LOG_TAG "bluez_stack/utils"
 #include "peripheral/log.h"
 
 #define L_ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))

@@ -17,6 +17,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <pthread.h>
+#include <semaphore.h>
 
 #include "lib/bluetooth.h"
 #include "lib/l2cap.h"
@@ -32,8 +34,10 @@
 
 #include "peripheral/gatt.h"
 #include "peripheral/uh_ble.h"
+#include "peripheral/conn_info.h" 
+#include "peripheral/utils.h"
 
-#define CONFIG_LOG_TAG "Bluez_Stack"
+#define CONFIG_LOG_TAG "bluez_stack_gatt"
 #include "peripheral/log.h"
 
 #define ATT_CID 4
@@ -60,8 +64,15 @@ static bluez_gatts_event_callback_func g_gatts_cb;
 
 static void gatts_callback(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_evt_param_t *param, uint8_t addr[6], uint8_t addr_type)
 {
+    struct addr_info bdaddr;
+    bdaddr.addr_type = addr_type;
+    memcpy(bdaddr.addr, addr, 6);
+
+    param->conn_handle = conn_info_get_handle_by_addr(bdaddr);
+    LOGD("%s conn_handle = %04x", __FUNCTION__, param->conn_handle);
+
 	if (g_gatts_cb != NULL)
-		g_gatts_cb(evt, param, addr, addr_type);
+		g_gatts_cb(evt, param);
 }
 
 void bluez_gatts_register_callback(bluez_gatts_event_callback_func func)
@@ -664,7 +675,7 @@ void bluez_gatts_server_start(void)
 	addr.l2_bdaddr_type = BDADDR_LE_RANDOM;
 
 	LOGI("bind addr %02x:%02x:%02x:%02x:%02x:%02x\n", static_addr[5], static_addr[4], static_addr[3],
-													  static_addr[2], static_addr[1], static_addr[0]);
+					static_addr[2], static_addr[1], static_addr[0]);
 	
 	if (bind(att_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 		fprintf(stderr, "Failed to bind ATT server socket: %m\n");

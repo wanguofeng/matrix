@@ -22,43 +22,59 @@
 #include <signal.h>
 #include <string.h>
 #include <poll.h>
+#include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
-
-#include "src/shared/mgmt.h"
 
 #ifndef WAIT_ANY
 #define WAIT_ANY (-1)
 #endif
 
 #include "src/shared/mainloop.h"
-#include "src/shared/util.h"
-#include "lib/bluetooth.h"
-#include "lib/mgmt.h"
 #include "peripheral/gap.h"
 #include "peripheral/gatt.h"
-
 #include "peripheral/uh_ble.h"
-#include "peripheral/conn_info.h" 
-#include "peripheral/utils.h"
 
-#define CONFIG_LOG_TAG "Bluez_Adapter"
+#define CONFIG_LOG_TAG "bluez_adapter"
 #include "peripheral/log.h"
 
-// #define Bluez_Adapter_Version     "v1.0.14-alpha-202305121355"
+#define bluez_adapter_version     "v1.0.23-rc-20230901"
+#define UHOS_BLE_GAP_MAX_USERS                  4
+#define APP_MAX_SERVICE_NUM                     10
+#define UHOS_BLE_GATTS_MAX_USERS                4
 
-#define Bluez_Adapter_Version     "v1.0.23-rc-20230901"
-// #define Bluez_Adapter_Version     "v1.1.0-rc"
-// #define Bluez_Adapter_Version     "v1.1.0-release"
-
-/*
- * BLE COMMON
-*/
-
-static uhos_ble_status_t uhos_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param);
-static uhos_ble_status_t uhos_ble_gatts_callback(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_evt_param_t *param);
 static pthread_t bluez_daemon_tid = (pthread_t)0;
-static sem_t bluez_adapter_sem;
+
+static uhos_ble_gap_cb_t       g_uhos_ble_pal_gap_cb_table[UHOS_BLE_GAP_MAX_USERS] = { NULL };
+static uhos_u8                 g_gap_users = 0;
+static uhos_ble_gatts_cb_t     g_uhos_ble_pal_gatts_cb_table[UHOS_BLE_GATTS_MAX_USERS] = { NULL };
+static uhos_u8                 g_gatts_users = 0;
+
+static uhos_ble_status_t uhos_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param)
+{
+    int i = 0;
+    uhos_ble_gap_cb_t cb = UHOS_NULL;
+    while (i < g_gap_users) {
+        if (g_uhos_ble_pal_gap_cb_table[i] != UHOS_NULL) {
+            cb = g_uhos_ble_pal_gap_cb_table[i];
+            cb(evt, param);
+        }
+        i++; 
+    }
+}
+
+static uhos_ble_status_t uhos_ble_gatts_callback(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_evt_param_t *param)
+{
+    int i = 0;
+    uhos_ble_gatts_cb_t cb = UHOS_NULL;
+    while (i < g_gatts_users) {
+        if (g_uhos_ble_pal_gatts_cb_table[i] != UHOS_NULL) {
+            cb = g_uhos_ble_pal_gatts_cb_table[i];
+            cb(evt, param);
+        }
+        i++;
+    }
+}
 
 static void signal_callback(int signum, void *user_data)
 {
@@ -72,23 +88,18 @@ static void signal_callback(int signum, void *user_data)
 	}
 }
 
-#define VERSION "5.65"
-
 static void * bluez_daemon(void *arg)
 {
     int exit_status = 0;
-    uint16_t hci_index = *(uint16_t *) arg;
+    sem_t * daemon_sem = (sem_t *)arg;
 
-
-    LOGW("Bluetooth periperhal ver %s, hci_index = %d", VERSION, hci_index);
-    LOGW("Bluetooth Adapter Version %s", Bluez_Adapter_Version);
+    LOGW("Bluetooth Adapter Version %s", bluez_adapter_version);
 
 	mainloop_init();
 	bluez_gap_init();
-    bluez_gap_adapter_init(hci_index);
-    bluez_gatts_server_start();
-
-    sem_post(&bluez_adapter_sem);
+    bluez_gap_register_callback(uhos_ble_gap_callback);
+    bluez_gatts_register_callback(uhos_ble_gatts_callback);
+    sem_post(daemon_sem);
 
     exit_status = mainloop_run_with_signal(signal_callback, NULL);
 
@@ -96,200 +107,34 @@ static void * bluez_daemon(void *arg)
 
 	bluez_gap_uinit();
     bluez_gatts_server_stop();
-
     pthread_exit(NULL);
 }
 
-static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t length,
-					const void *param, void *user_data)
-{
-    switch(event)
-    {
-        case MGMT_EV_DEVICE_CONNECTED:
-        {
-            const struct mgmt_ev_device_connected *ev = param;
-            uhos_ble_gap_evt_param_t evt_param = {0x00};
-            
-            struct addr_info bdaddr;
-
-            memcpy(bdaddr.addr, ev->addr.bdaddr.b, 6);
-            bdaddr.addr_type = ev->addr.type;
-
-            uint8_t role = conn_info_get_role_by_addr(bdaddr);
-            evt_param.conn_handle = conn_info_generate_handle();
-            evt_param.connect.role = role;
-
-            LOGI("connected handle = %04x", evt_param.conn_handle);
-
-            if (ev->addr.type == BDADDR_LE_PUBLIC) {
-                evt_param.connect.type = UHOS_BLE_ADDRESS_TYPE_PUBLIC;
-            } else if (ev->addr.type == BDADDR_LE_RANDOM) {
-                evt_param.connect.type = UHOS_BLE_ADDRESS_TYPE_RANDOM;
-            } else {
-                evt_param.connect.type = 0x02; // unknow;
-            }
-
-            memcpy(evt_param.connect.peer_addr, ev->addr.bdaddr.b, 6);
-
-            evt_param.connect.conn_param.conn_sup_timeout = 0x00; // can't get this param;
-            evt_param.connect.conn_param.max_conn_interval = 0x00; // can't get this param;
-            evt_param.connect.conn_param.min_conn_interval = 0x00; // can't get this param;
-            evt_param.connect.conn_param.slave_latency = 0x00; // can't get this param;
-
-            conn_info_add_gatts(evt_param.conn_handle, bdaddr);
-            uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_CONNECTED, &evt_param);
-            break;
-        }   
-        case MGMT_EV_DEVICE_DISCONNECTED:
-        {
-            const struct mgmt_ev_device_disconnected *ev = param;
-
-            uhos_ble_gap_evt_param_t evt_param = {0x00};
-
-            struct addr_info bdaddr;
-            memcpy(bdaddr.addr, ev->addr.bdaddr.b, 6);
-            bdaddr.addr_type = ev->addr.type;
-
-            evt_param.conn_handle = conn_info_get_handle_by_addr(bdaddr);
-
-            uint8_t reason = UNKNOW_OTHER_ERROR;
-
-            if (ev->reason == MGMT_DEV_DISCONN_REMOTE) {
-                reason = UHOS_BLE_REMOTE_USER_TERMINATED;
-            } else if (ev->reason == MGMT_DEV_DISCONN_TIMEOUT) {
-                reason = UHOS_BLE_CONNECTION_TIMEOUT;
-            } else if (ev->reason == MGMT_DEV_DISCONN_LOCAL_HOST) {
-                reason = UHOS_BLE_LOCAL_HOST_TERMINATED;
-            } else {
-                reason = UNKNOW_OTHER_ERROR;
-            }
-
-            LOGE("disconnect handle = %04x", evt_param.conn_handle);
-
-            evt_param.disconnect.reason = reason;
-            conn_info_del_gatts(evt_param.conn_handle, bdaddr);
-            uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_DISCONNET, &evt_param);
-            break;
-        }
-        case MGMT_EV_NEW_CONN_PARAM:
-        {
-            const struct mgmt_ev_new_conn_param * ev = param;
-            uhos_ble_gap_evt_param_t evt_param = {0x00};
-
-            struct addr_info bdaddr;
-            memcpy(bdaddr.addr, ev->addr.bdaddr.b, 6);
-            bdaddr.addr_type = ev->addr.type;
-
-            evt_param.conn_handle = conn_info_get_handle_by_addr(bdaddr);
-            evt_param.update_conn.conn_param.conn_sup_timeout = ev->timeout;
-            evt_param.update_conn.conn_param.max_conn_interval = ev->max_interval;
-            evt_param.update_conn.conn_param.min_conn_interval = ev->min_interval;
-            evt_param.update_conn.conn_param.slave_latency = ev->latency;
-            uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_CONN_PARAM_UPDATED, &evt_param);
-            break;
-        }
-        case MGMT_EV_DEVICE_FOUND:
-        {
-            const struct mgmt_ev_device_found * ev = param;
-            uint16_t eir_len;
-            uint32_t flags;
-            if (length < sizeof(*ev)) {
-                LOGE("Too short device_found length (%u bytes)", length);
-                return;
-            }
-            LOGI("adv data len(%d)", ev->eir_len);
-            if (ev->eir_len > 31) {
-                LOGI("len(%d) can't process yet", ev->eir_len);
-                return;
-            }
-            uhos_ble_gap_evt_param_t evt_param = {0x00};
-            evt_param.conn_handle = 0x00; // not used
-            evt_param.report.addr_type = ev->addr.type;
-            evt_param.report.adv_type = FULL_DATA; // can't get adv type(refers PDU Type)
-            evt_param.report.data_len = ev->eir_len;
-            memcpy(evt_param.report.peer_addr, ev->addr.bdaddr.b, 6);
-            evt_param.report.rssi = ev->rssi;;
-            memcpy(evt_param.report.data, ev->eir, ev->eir_len);
-            uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_ADV_REPORT, &evt_param);
-            break;
-        }
-    }
-}
-
-static void stack_gap_cmd_callback(uint16_t cmd, int8_t status, uint16_t len,
-					const void *param, void *user_data)
-{
-    switch(cmd)
-    {
-        case MGMT_OP_READ_DEF_SYSTEM_CONFIG:
-        {
-            LOGI("receive MGMT_OP_READ_DEF_SYSTEM_CONFIG status(%d)", status);
-            sem_post(&bluez_adapter_sem);
-            break;
-        }
-
-        case MGMT_OP_SET_POWERED:
-        {
-            LOGI("receive MGMT_OP_SET_POWERED status(%d)", status);
-            break;
-        }
-            
-        case MGMT_OP_DISCONNECT:
-        {
-            uhos_ble_gap_evt_param_t evt_param = {0x00};
-            const struct mgmt_rp_disconnect *rp = param;
-
-            struct addr_info bdaddr;
-            memcpy(bdaddr.addr, rp->addr.bdaddr.b, 6);
-            bdaddr.addr_type = rp->addr.type;
-
-            evt_param.conn_handle = conn_info_get_handle_by_addr(bdaddr);
-            uint8_t reason = MGMT_DEV_DISCONN_LOCAL_HOST;
-            evt_param.disconnect.reason = reason;
-            conn_info_del_gatts(evt_param.conn_handle, bdaddr);
-            uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_DISCONNET, &evt_param);
-            break;
-        }
-        default:
-            break;
-    }
-}
-
-static void stack_gatt_server_callback(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_evt_param_t *param, uint8_t addr[6], uint8_t addr_type)
-{
-    struct addr_info bdaddr;
-    bdaddr.addr_type = addr_type;
-    memcpy(bdaddr.addr, addr, 6);
-
-    param->conn_handle = conn_info_get_handle_by_addr(bdaddr);
-    LOGD("%s conn_handle = %04x", __FUNCTION__, param->conn_handle);
-
-    uhos_ble_gatts_callback(evt, param);
-}
+/*
+ * BLE COMMON
+*/
 
 uhos_ble_status_t uhos_ble_enable(void)
 {
     int ret = 0;
-    uint16_t hci_index = MGMT_INDEX_NONE;
+    static sem_t daemon_sem;
 
     if (bluez_daemon_tid != (pthread_t)0) {
         LOGI("bluez daemon is already init");
         return UHOS_BLE_ERROR;
     }
 
-    conn_info_init();
-    sem_init(&bluez_adapter_sem, 0, 0);
-    bluez_gap_register_callback(stack_gap_cmd_callback, stack_gap_event_callback);
-    bluez_gatts_register_callback(stack_gatt_server_callback);
-    ret = pthread_create(&bluez_daemon_tid, NULL, bluez_daemon, &hci_index);
+    sem_init(&daemon_sem, 0, 0);
+
+    ret = pthread_create(&bluez_daemon_tid, NULL, bluez_daemon, &daemon_sem);
     if (ret != 0) {
         LOGI("Error creating thread!");
-        sem_destroy(&bluez_adapter_sem);
+        sem_destroy(&daemon_sem);
         return UHOS_BLE_ERROR;
     }
 
-    sem_wait(&bluez_adapter_sem);
-
+    sem_wait(&daemon_sem);
+    sleep(2);
     LOGI("create bluez_daemon success!");
     return UHOS_BLE_SUCCESS;
 }
@@ -304,9 +149,8 @@ uhos_ble_status_t uhos_ble_disable(void)
     pthread_kill(bluez_daemon_tid, SIGTERM);
     pthread_join(bluez_daemon_tid, NULL);
     bluez_daemon_tid = (pthread_t)0;
-    conn_info_deinit();
-    LOGI("bluez daemon exit successfully");
 
+    LOGI("bluez daemon exit successfully");
     return UHOS_BLE_SUCCESS;
 }
 
@@ -318,23 +162,19 @@ uhos_ble_status_t uhos_ble_address_get(uhos_ble_addr_t mac)
 
 uhos_ble_status_t uhos_ble_rssi_start(uhos_u16 conn_handle)
 {
+
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_rssi_get_detect(uhos_u16 conn_handle, uhos_s8 *rssi)
 {
-    struct addr_info bdaddr;
-    conn_info_get_addr_by_handle(conn_handle, &bdaddr);
-    bluez_gap_get_conn_rssi(bdaddr.addr, bdaddr.addr_type, rssi);
-    return UHOS_BLE_SUCCESS;
+    bluez_gap_get_conn_rssi(conn_handle, rssi);
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_rssi_get(uhos_u16 conn_handle, uhos_s8 *rssi)
 {
-    struct addr_info bdaddr;
-    conn_info_get_addr_by_handle(conn_handle, &bdaddr);
-    bluez_gap_get_conn_rssi(bdaddr.addr, bdaddr.addr_type, rssi);
+    bluez_gap_get_conn_rssi(conn_handle, rssi);
     return UHOS_BLE_SUCCESS;
 }
 
@@ -352,23 +192,6 @@ uhos_ble_status_t uhos_ble_tx_power_set(uhos_u16 conn_handle, uhos_s8 tx_power)
 /*
  * BLE GAP
 */
-
-#define UHOS_BLE_GAP_MAX_USERS              4
-uhos_ble_gap_cb_t   g_uhos_ble_pal_gap_cb_table[UHOS_BLE_GAP_MAX_USERS] = { NULL };
-uhos_u8             g_gap_users = 0;
-
-static uhos_ble_status_t uhos_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param)
-{
-    int i = 0;
-    uhos_ble_gap_cb_t cb = UHOS_NULL;
-    while (i < g_gap_users) {
-        if (g_uhos_ble_pal_gap_cb_table[i] != UHOS_NULL) {
-            cb = g_uhos_ble_pal_gap_cb_table[i];
-            cb(evt, param);
-        }
-        i++; 
-    }
-}
 
 uhos_ble_status_t uhos_ble_gap_callback_register(uhos_ble_gap_cb_t cb)
 {
@@ -442,16 +265,7 @@ uhos_ble_status_t uhos_ble_gap_update_conn_params(
 
 uhos_ble_status_t uhos_ble_gap_disconnect(uhos_u16 conn_handle)
 {
-    // mgmt disconncet;
-    bdaddr_t bdaddr;
-    uint8_t bdaddr_type;
-    struct addr_info info;
-
-    conn_info_get_addr_by_handle(conn_handle, &info);
-    LOGW("disconnect conn_handle(%04x)", conn_handle);
-    memcpy(bdaddr.b, info.addr, 6);
-
-    bluez_gap_disconnect(&bdaddr, info.addr_type);
+    bluez_gap_disconnect(conn_handle);
     return UHOS_BLE_SUCCESS;
 }
 
@@ -466,25 +280,6 @@ uhos_ble_status_t uhos_ble_gap_connect(uhos_ble_gap_scan_param_t scan_param,
 /**************************************************************************************************/
 /* BLE GATT层server相关功能接口原型                                                                 */
 /**************************************************************************************************/
-
-#define APP_MAX_SERVICE_NUM                     10
-#define UHOS_BLE_GATTS_MAX_USERS                4
-
-uhos_ble_gatts_cb_t     g_uhos_ble_pal_gatts_cb_table[UHOS_BLE_GATTS_MAX_USERS] = { NULL };
-uhos_u8                 g_gatts_users = 0;
-
-static uhos_ble_status_t uhos_ble_gatts_callback(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_evt_param_t *param)
-{
-    int i = 0;
-    uhos_ble_gatts_cb_t cb = UHOS_NULL;
-    while (i < g_gatts_users) {
-        if (g_uhos_ble_pal_gatts_cb_table[i] != UHOS_NULL) {
-            cb = g_uhos_ble_pal_gatts_cb_table[i];
-            cb(evt, param);
-        }
-        i++;
-    }
-}
 
 uhos_ble_status_t uhos_ble_gatts_callback_register(uhos_ble_gatts_cb_t cb)
 {

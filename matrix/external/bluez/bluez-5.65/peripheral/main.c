@@ -115,10 +115,11 @@ int main(int argc, char *argv[])
 			count ++;
 			uhos_ble_rssi_get(conn_handle, &rssi);
 			uhos_ble_gatts_mtu_get(conn_handle, &mtu);
-			LOGI("mtu is %d", mtu);
-			if (count == 0xFFF) {
+			LOGI("mtu is %d, count = %d", mtu, count);
+			if (count == 30) {
 				uhos_ble_gap_disconnect(conn_handle);
 				count = 0;
+				break;
 			}
 		}
 	}
