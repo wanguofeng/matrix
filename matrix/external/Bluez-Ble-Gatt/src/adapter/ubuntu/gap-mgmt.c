@@ -73,6 +73,7 @@ static uint8_t g_scan_rsp[ADV_MAX_LENGTH] = {0x00};
 static uint8_t g_scan_rsp_len = 0;
 
 static bluez_gap_callback_func gap_cb = NULL;
+static bluez_init_callback_func init_cb = NULL;
 
 static void recv_cmd(int fd, uint32_t events, void *user_data);
 
@@ -472,6 +473,7 @@ static void read_sysconfig_rsp(uint8_t status, uint16_t len, const void *param,
 	if (status != 0) {
 		LOGW("Read system configuration failed with status "
 				"0x%02x (%s)", status, mgmt_errstr(status));
+		init_cb(status);
 		return;
 	}
 
@@ -486,6 +488,8 @@ static void read_sysconfig_rsp(uint8_t status, uint16_t len, const void *param,
 	mgmt_tlv_list_free(tlv_list);
 	
 	gap_cmd_callback(MGMT_OP_READ_DEF_SYSTEM_CONFIG, status, len, param, user_data);
+
+	init_cb(status);
 }
 
 static void reset_complete(uint8_t status, uint16_t len,
@@ -559,12 +563,12 @@ static void read_info_complete(uint8_t status, uint16_t len,
 	current_settings = le32_to_cpu(rp->current_settings);
 
 	if ((supported_settings & required_settings) != required_settings) {
-		LOGW("Index %d doesn't support BLE Features ", index);
+		LOGI("Index %d doesn't support BLE Features ", index);
 		return;
 	}
 
 	if ((mgmt_index != MGMT_INDEX_NONE) && (mgmt_index != index)) {
-		LOGE("Selecting index %u already", mgmt_index);
+		LOGI("Selecting index %u already", mgmt_index);
 		return;
 	}
 
@@ -1228,11 +1232,12 @@ void bluez_gap_register_callback(bluez_gap_callback_func func)
 	gap_cb = func;
 }
 
-int bluez_gap_init(void)
+int bluez_gap_init(bluez_init_callback_func func)
 {
 	mgmt = mgmt_new_default();
 	if (!mgmt) {
 		LOGE("Failed to open management socket");
+		func(-1);
 		return -1;
 	}
 
@@ -1248,9 +1253,11 @@ int bluez_gap_init(void)
 				MGMT_INDEX_NONE, 0, NULL,
 				read_version_complete, NULL, NULL)) {
 		LOGE("Failed to read version");
+		func(-1);
 		return -1;
 	}
 
+	init_cb = func;
 	return 0;
 }
 

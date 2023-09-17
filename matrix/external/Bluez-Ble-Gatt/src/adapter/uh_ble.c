@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <time.h>
 
 #ifndef WAIT_ANY
 #define WAIT_ANY (-1)
@@ -88,18 +89,26 @@ static void signal_callback(int signum, void *user_data)
 	}
 }
 
+static sem_t daemon_sem;
+static uhos_u8 init_status = -1;
+
+static void bluez_init_callback(uhos_u8 status)
+{
+    init_status = status;
+    sem_post(&daemon_sem);
+}
+
 static void * bluez_daemon(void *arg)
 {
     int exit_status = 0;
-    sem_t * daemon_sem = (sem_t *)arg;
 
     LOGW("Bluetooth Adapter Version %s", bluez_adapter_version);
 
 	mainloop_init();
-	bluez_gap_init();
+
     bluez_gap_register_callback(uhos_ble_gap_callback);
     bluez_gatts_register_callback(uhos_ble_gatts_callback);
-    sem_post(daemon_sem);
+	bluez_gap_init(bluez_init_callback);
 
     exit_status = mainloop_run_with_signal(signal_callback, NULL);
 
@@ -117,7 +126,6 @@ static void * bluez_daemon(void *arg)
 uhos_ble_status_t uhos_ble_enable(void)
 {
     int ret = 0;
-    static sem_t daemon_sem;
 
     if (bluez_daemon_tid != (pthread_t)0) {
         LOGI("bluez daemon is already init");
@@ -126,16 +134,24 @@ uhos_ble_status_t uhos_ble_enable(void)
 
     sem_init(&daemon_sem, 0, 0);
 
-    ret = pthread_create(&bluez_daemon_tid, NULL, bluez_daemon, &daemon_sem);
+    ret = pthread_create(&bluez_daemon_tid, NULL, bluez_daemon, NULL);
     if (ret != 0) {
         LOGI("Error creating thread!");
         sem_destroy(&daemon_sem);
         return UHOS_BLE_ERROR;
     }
 
-    sem_wait(&daemon_sem);
-    sleep(2);
-    LOGI("create bluez_daemon success!");
+    struct timespec abs_timeout;
+    abs_timeout.tv_sec = time(NULL) + 2;
+    abs_timeout.tv_nsec = 0;
+    sem_timedwait(&daemon_sem, &abs_timeout);
+
+    if (init_status != 0) {
+        LOGE("init bluetooth failed!");
+        return UHOS_BLE_ERROR;
+    }
+
+    LOGI("init bluetooth success!");
     return UHOS_BLE_SUCCESS;
 }
 
@@ -220,21 +236,21 @@ uhos_ble_status_t uhos_ble_gap_adv_data_set(
 uhos_ble_status_t uhos_ble_gap_adv_start(uhos_ble_gap_adv_param_t *p_adv_param)
 {  
     bluez_gap_set_adv_start(p_adv_param->adv_type, p_adv_param->adv_interval_max, p_adv_param->adv_interval_min);
-    LOGI("adv start\r\n\n");
+    LOGI("adv start");
     return UHOS_BLE_SUCCESS; 
 }
 
 uhos_ble_status_t uhos_ble_gap_reset_adv_start(void)
 {
     bluez_gap_set_adv_restart();
-    LOGI("adv reset\r\n\n");
+    LOGI("adv reset");
     return UHOS_BLE_SUCCESS; 
 }
 
 uhos_ble_status_t uhos_ble_gap_adv_stop(void)
 {
     bluez_gap_set_adv_stop();
-    LOGI("adv stop\r\n\n");
+    LOGI("adv stop");
     return UHOS_BLE_SUCCESS; 
 }
 
@@ -244,14 +260,14 @@ uhos_ble_status_t uhos_ble_gap_scan_start(
 {
     bluez_gap_set_scan_start(scan_type, scan_param.scan_interval,
                              scan_param.scan_window, scan_param.timeout);
-    LOGI("scan start\r\n\n");
+    LOGI("scan start");
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gap_scan_stop(void)
 {
     bluez_gap_set_scan_stop();
-    LOGI("scan stop\r\n\n");
+    LOGI("scan stop");
     return UHOS_BLE_SUCCESS;
 }
 

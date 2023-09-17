@@ -17,8 +17,9 @@
 #define	ADV_NONCONN_IND					0x03
 
 typedef uhos_ble_status_t (*bluez_gap_callback_func)(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param);
+typedef void (*bluez_init_callback_func)(uhos_u8 status);
 
-int bluez_gap_init(void);
+int bluez_gap_init(bluez_init_callback_func func);
 void bluez_gap_uinit(void);
 void bluez_gap_get_address(uint8_t *mac);
 void bluez_gap_register_callback(bluez_gap_callback_func func);
