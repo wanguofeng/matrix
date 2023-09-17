@@ -31,12 +31,12 @@
 #endif
 
 #include "src/shared/mainloop.h"
-#include "peripheral/gap.h"
-#include "peripheral/gatt.h"
-#include "peripheral/uh_ble.h"
+#include "adapter/gap.h"
+#include "adapter/gatt.h"
+#include "adapter/uh_ble.h"
 
 #define CONFIG_LOG_TAG "bluez_adapter"
-#include "peripheral/log.h"
+#include "adapter/log.h"
 
 #define bluez_adapter_version     "v1.0.23-rc-20230901"
 #define UHOS_BLE_GAP_MAX_USERS                  4

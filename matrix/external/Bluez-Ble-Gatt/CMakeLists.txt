@@ -6,10 +6,10 @@ cmake_minimum_required(VERSION 3.10)
 # 检查目标平台
 if(PLATFORM_X86)
     message("Configuring for x86 platform")
-    file(GLOB SOURCE_FILES "src/lib/*.c" "src/src/shared/*.c" "src/peripheral/*.c" "src/peripheral/ubuntu/*.c")
+    file(GLOB SOURCE_FILES "src/lib/*.c" "src/src/shared/*.c" "src/adapter/*.c" "src/adapter/ubuntu/*.c")
 elseif(PLATFORM_ARM)
     message("Configuring for ARM platform")
-    file(GLOB SOURCE_FILES "src/lib/*.c" "src/src/shared/*.c" "src/peripheral/*.c" "src/peripheral/arm/*.c")
+    file(GLOB SOURCE_FILES "src/lib/*.c" "src/src/shared/*.c" "src/adapter/*.c" "src/adapter/arm/*.c")
 
     set(CMAKE_SYSTEM_NAME Linux) # 指定目标系统为Linux
     set(CMAKE_SYSTEM_PROCESSOR arm) # 指定目标处理器为ARM

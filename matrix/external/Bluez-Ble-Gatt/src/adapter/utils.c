@@ -3,11 +3,11 @@
 #include <string.h>
 
 #include "lib/bluetooth.h"
-#include "peripheral/utils.h"
+#include "adapter/utils.h"
 #include "lib/mgmt.h"
 
 #define CONFIG_LOG_TAG "bluez_stack/utils"
-#include "peripheral/log.h"
+#include "adapter/log.h"
 
 #define L_ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 

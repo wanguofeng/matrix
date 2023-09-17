@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include "peripheral/uh_ble.h"
+
+#include "adapter/uh_ble.h"
 
 #define CONFIG_LOG_TAG	"demo"
-#include "peripheral/log.h"
+#include "adapter/log.h"
 
 // 定义广播包类型
 #define BLE_AD_TYPE_FLAGS                    0x01

@@ -9,7 +9,7 @@
  */
 
 #include <stdint.h>
-#include "peripheral/uh_ble.h"
+#include "adapter/uh_ble.h"
 
 #define	ADV_IND							0x00
 #define	ADV_DIRECT_IND					0x01

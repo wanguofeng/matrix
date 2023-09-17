@@ -28,18 +28,18 @@
 
 #include "lib/mgmt.h"
 #include "src/shared/mgmt.h"
-#include "peripheral/gatt.h"
-#include "peripheral/gap.h"
-#include "peripheral/utils.h"
+#include "adapter/gatt.h"
+#include "adapter/gap.h"
+#include "adapter/utils.h"
 #include "src/shared/mainloop.h"
 #include "src/shared/util.h"
 #include "src/shared/queue.h"
 
 #define CONFIG_LOG_TAG "bluez_stack_gap_mgmt"
-#include "peripheral/log.h"
+#include "adapter/log.h"
 
-#include "peripheral/utils.h"
-#include "peripheral/conn_info.h"
+#include "adapter/utils.h"
+#include "adapter/conn_info.h"
 
 #define ADV_MAX_LENGTH	31
 

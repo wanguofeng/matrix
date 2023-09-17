@@ -10,7 +10,7 @@
 
 #include <stdint.h>
 
-#include "peripheral/uh_ble.h" 
+#include "adapter/uh_ble.h" 
 
 typedef uhos_ble_status_t (*bluez_gatts_event_callback_func)(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_evt_param_t *param);
 

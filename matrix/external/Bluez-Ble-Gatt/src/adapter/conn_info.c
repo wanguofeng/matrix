@@ -8,10 +8,10 @@
 #include <string.h>
 #include "src/shared/util.h"
 #include "src/shared/queue.h"
-#include "peripheral/conn_info.h"
+#include "adapter/conn_info.h"
 
 #define CONFIG_LOG_TAG "Bluez_Stack/ConnInfo"
-#include "peripheral/log.h"
+#include "adapter/log.h"
 
 #define INVAILD_CONNECTION_HANDLE				0x0000
 #define MIN_CONNECTION_HANDLE					0x0100

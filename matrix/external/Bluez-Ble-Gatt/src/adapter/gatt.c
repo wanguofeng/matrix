@@ -32,13 +32,13 @@
 #include "src/shared/gatt-client.h"
 #include "src/shared/gatt-helpers.h"
 
-#include "peripheral/gatt.h"
-#include "peripheral/uh_ble.h"
-#include "peripheral/conn_info.h" 
-#include "peripheral/utils.h"
+#include "adapter/gatt.h"
+#include "adapter/uh_ble.h"
+#include "adapter/conn_info.h" 
+#include "adapter/utils.h"
 
 #define CONFIG_LOG_TAG "bluez_stack_gatt"
-#include "peripheral/log.h"
+#include "adapter/log.h"
 
 #define ATT_CID 4
 
