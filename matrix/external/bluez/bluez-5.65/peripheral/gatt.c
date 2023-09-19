@@ -511,9 +511,12 @@ bool bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uin
 {
 	struct gatt_conn *conn = queue_peek_head(conn_list);
 
-	LOGI("%s handle = %04x, length = %d", __FUNCTION__, char_handle, length);
+	const uint8_t *tmp = malloc(length);
+	memset(tmp, 0x00, length);
+	memcpy(tmp, value, length);
 
-	LOG_HEXDUMP_DBG(value, length, "indication");
+	LOGI("%s handle = %04x, length = %d", __FUNCTION__, char_handle, length);
+	LOG_HEXDUMP_DBG(tmp, length, "indication tmp");
 
 	sem_t sem;
 	sem_init(&sem, 0, 0);
@@ -522,14 +525,16 @@ bool bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uin
 	ts.tv_sec += 1;
 
 	bt_gatt_server_send_indication(conn->gatt,
-					char_handle, value,
+					char_handle, tmp,
 					length,
 					conf_cb, &sem, NULL);
 
 	if (sem_timedwait(&sem, &ts) == 0) {
+		free(tmp);
 		LOGE("send indication success!!!");
 		return true;
 	} else {
+		free(tmp);
 		LOGE("send indication timeout!!!");
 		return false;
 	}
