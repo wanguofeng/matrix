@@ -17,6 +17,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <time.h>
+#include <semaphore.h>
+#include <pthread.h>
 
 #include "lib/bluetooth.h"
 #include "lib/l2cap.h"
@@ -484,7 +487,14 @@ done:
 	free(param);
 }
 
-void bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, uint16_t length)
+static void conf_cb(void *user_data)
+{
+	LOGI("Received confirmation\n");
+	sem_t *sem = (sem_t *)user_data;
+	sem_post(sem);
+}
+
+bool bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, uint16_t length)
 {
 	struct gatt_conn *conn = queue_peek_head(conn_list);
 
@@ -492,12 +502,12 @@ void bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, u
 	
 	LOG_HEXDUMP_DBG(value, length, "notification");
 
-	bt_gatt_server_send_notification(conn->gatt,
+	return bt_gatt_server_send_notification(conn->gatt,
 					char_handle, value,
 					length, false);
 }
 
-void bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uint16_t length)
+bool bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uint16_t length)
 {
 	struct gatt_conn *conn = queue_peek_head(conn_list);
 
@@ -505,10 +515,24 @@ void bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uin
 
 	LOG_HEXDUMP_DBG(value, length, "indication");
 
+	sem_t sem;
+	sem_init(&sem, 0, 0);
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	ts.tv_sec += 1;
+
 	bt_gatt_server_send_indication(conn->gatt,
 					char_handle, value,
 					length,
-					NULL, NULL, NULL);
+					conf_cb, &sem, NULL);
+
+	if (sem_timedwait(&sem, &ts) == 0) {
+		LOGE("send indication success!!!");
+		return true;
+	} else {
+		LOGE("send indication timeout!!!");
+		return false;
+	}
 }
 
 void bluez_gatts_set_mtu(uint16_t mtu)

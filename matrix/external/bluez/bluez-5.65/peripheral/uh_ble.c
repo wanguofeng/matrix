@@ -539,11 +539,18 @@ uhos_ble_status_t uhos_ble_gatts_notify_or_indicate(
     uhos_u16 len)
 {
     if (offset == 0) {
-        bluez_gatts_send_notification(char_value_handle, p_value, len);
+        if (true == bluez_gatts_send_notification(char_value_handle, p_value, len)) {
+            return UHOS_BLE_SUCCESS;
+        } else {
+            return UHOS_BLE_ERROR;
+        }
     } else {
-        bluez_gatts_send_indication(char_value_handle, p_value, len);
+        if (true == bluez_gatts_send_indication(char_value_handle, p_value, len)) {
+            return UHOS_BLE_SUCCESS;
+        } else {
+            return UHOS_BLE_ERROR;
+        }
     }
-    return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gatts_mtu_default_set(uhos_u16 mtu)

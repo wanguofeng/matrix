@@ -23,7 +23,7 @@ typedef void (*bluez_gatts_event_callback_func)(uhos_ble_gatts_evt_t evt, uhos_b
                                                 uint8_t addr[6], uint8_t addr_type);
 
 void bluez_gatts_register_callback(bluez_gatts_event_callback_func func);
-void bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, uint16_t length);
-void bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uint16_t length);
+bool bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, uint16_t length);
+bool bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uint16_t length);
 void bluez_gatts_set_mtu(uint16_t mtu);
 void bluez_gatts_get_mtu(uint16_t *mtu);
