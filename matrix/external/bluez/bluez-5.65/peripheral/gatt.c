@@ -522,7 +522,7 @@ bool bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uin
 	sem_init(&sem, 0, 0);
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
-	ts.tv_sec += 1;
+	ts.tv_sec += 2;
 
 	bt_gatt_server_send_indication(conn->gatt,
 					char_handle, tmp,

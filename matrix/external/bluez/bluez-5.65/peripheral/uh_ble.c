@@ -47,7 +47,7 @@
 
 // #define Bluez_Adapter_Version     "v1.0.14-alpha-202305121355"
 
-#define Bluez_Adapter_Version     "v1.0.24-rc-20230919"
+#define Bluez_Adapter_Version     "v1.0.25-rc-20230921"
 // #define Bluez_Adapter_Version     "v1.1.0-rc"
 // #define Bluez_Adapter_Version     "v1.1.0-release"
 
@@ -79,7 +79,6 @@ static void * bluez_daemon(void *arg)
     int exit_status = 0;
     uint16_t hci_index = *(uint16_t *) arg;
 
-
     LOGW("Bluetooth periperhal ver %s, hci_index = %d", VERSION, hci_index);
     LOGW("Bluetooth Adapter Version %s", Bluez_Adapter_Version);
 
@@ -87,7 +86,7 @@ static void * bluez_daemon(void *arg)
 	bluez_gap_init();
     bluez_gap_adapter_init(hci_index);
 
-    exit_status = mainloop_run_with_signal(signal_callback, NULL);
+    exit_status = mainloop_run();
 
     LOGI("bluez daemon exit_status(%d)", exit_status);
 
