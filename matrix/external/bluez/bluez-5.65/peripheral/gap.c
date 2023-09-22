@@ -40,6 +40,14 @@
 
 #define ADV_MAX_LENGTH	31
 
+#define HCI_VERSION_4_1	0x07
+#define HCI_VERSION_4_2	0x08
+#define HCI_VERSION_5_0	0x09
+#define HCI_VERSION_5_1	0x0A
+#define HCI_VERSION_5_2	0x0B
+#define HCI_VERSION_5_3	0x0C
+#define HCI_VERSION_5_4	0x0D
+
 static int event_fd = 0;
 
 static struct queue *pending_cmd_list = NULL;
@@ -49,6 +57,7 @@ static struct mgmt *mgmt = NULL;
 static uint16_t mgmt_index = MGMT_INDEX_NONE;
 static uint8_t mgmt_version = 0;
 static uint8_t mgmt_revision = 0;
+
 
 static bool adv_features = false;
 static bool adv_instances = false;
@@ -70,6 +79,7 @@ static uint8_t g_scan_rsp[ADV_MAX_LENGTH] = {0x00};
 static uint8_t g_scan_rsp_len = 0;
 
 static bool mgmt_low_version = false;
+static bool hci_low_version = false;
 
 static bluez_gap_event_callback_func g_event_cb = NULL;
 static bluez_gap_cmd_callback_func g_cmd_cb = NULL;
@@ -431,8 +441,12 @@ static void read_info_complete(uint8_t status, uint16_t len,
 		return;
 	}
 
-	LOGD("Selecting index %u", index);
+	LOGD("Selecting index %u, hci_version = %x", index, rp->version);
 
+	if (HCI_VERSION_4_2 >= rp->version) {
+		hci_low_version = true;
+	}
+	
 	mgmt_index = index;
 
 	memcpy(public_addr, (uint8_t *)&rp->bdaddr, 6);
@@ -1044,80 +1058,132 @@ static void hci_if_set_random_address(uint8_t *addr)
     } 
 }
 
-static void hci_if_set_adv_data(uint8_t * adv_data, uint8_t adv_len,
-									uint8_t * scan_rsp, uint8_t scan_rsp_len)
-{
-	int device_id = hci_get_route(NULL);
+#define OCF_LE_SET_EXTEND_ADVERTISING_PARAMETERS	0x0036
+typedef struct {
+	uint8_t		handle;
+	uint16_t 	properties;
+	uint8_t		min_interval[3];
+	uint8_t		max_interval[3];
+	uint8_t		chan_map;
+	uint8_t		own_bdaddr_type;
+	uint8_t		direct_bdaddr_type;
+	bdaddr_t	direct_bdaddr;
+	uint8_t		filter;
+	uint8_t		tx_power;
+	uint8_t		primary_phy;
+	uint8_t		secondary_max_skip;
+	uint8_t		secondary_phy;
+	uint8_t		sid;
+	uint8_t		scan_request_notifications;
+} __attribute__ ((packed)) le_set_extend_advertising_parameters_cp;
+#define LE_SET_EXTEND_ADVERTISING_PARAMETERS_CP_SIZE 25
 
-	int device_handle = 0;
-	
-	if((device_handle = hci_open_dev(device_id)) < 0)
-	{
-		LOGE("Could not open device");
-		return;
+#define OCF_LE_SET_EXTEND_ADVERTISING_DATA 			0x0037
+typedef struct {
+	uint8_t		handle;
+	uint8_t		operation;
+	uint8_t		fragment;
+	uint8_t		length;
+	uint8_t		data[31];
+} __attribute__ ((packed)) le_set_extend_advertising_data_cp;
+#define LE_SET_EXTEND_ADVERTISING_DATA_CP_SIZE 35
+
+#define OCF_LE_SET_EXTEND_SCAN_RESPONSE_DATA		0x0038
+typedef struct {
+	uint8_t		handle;
+	uint8_t		operation;
+	uint8_t		fragment;
+	uint8_t		length;
+	uint8_t		data[31];
+} __attribute__ ((packed)) le_set_extend_scan_response_data_cp;
+#define LE_SET_EXTEND_SCAN_RESPONSE_DATA_CP_SIZE 35
+
+#define OCF_LE_SET_EXTEND_ADVERTISE_ENABLE		0x0039
+typedef struct {
+	uint8_t		enable;
+	uint8_t		num_sets;
+	uint8_t		handle;
+	uint16_t	duration;
+	uint8_t		max_ext_adv_events;
+} __attribute__ ((packed)) le_set_extend_advertise_enable_cp;
+#define LE_SET_EXTEND_ADVERTISE_ENABLE_CP_SIZE 6
+
+#define EXTEND_ADV_HANDLE						0x01
+
+#define EXTEND_HCI_ADV_NONCONN_IND				0x0010
+#define EXTEND_HCI_ADV_LOW_DUTY_DIRECT_IND		0x0015
+#define EXTEND_HCI_ADV_HIGH_DUTY_DIRECT_IND		0x001D
+#define EXTEND_HCI_ADV_SCAN_IND					0x0012
+#define EXTEND_HCI_ADV_IND						0x0013
+
+
+static int device_handle = 0;
+static void hci_if_set_scan_rsp(uint8_t * scan_rsp, uint8_t scan_rsp_len)
+{
+	if (device_handle == 0) {
+		int device_id = hci_get_route(NULL);
+		int ret = 0;
+		device_handle = 0;
+		
+		if((device_handle = hci_open_dev(device_id)) < 0)
+		{
+			LOGE("Could not open device");
+			return;
+		}
 	}
 
 	uint8_t status;
 	struct hci_request rq;
 	uint8_t data_length = 0;
 	memset(&rq, 0, sizeof(rq));
+	int ret = 0;
 
-	// Setup advertising data
-	le_set_advertising_data_cp adv_data_cp;
-	memset(&adv_data_cp, 0, sizeof(adv_data_cp));
-	memcpy(adv_data_cp.data, adv_data, adv_len);
+	if (hci_low_version) {
+		// Setup legacy scan response data
+		le_set_scan_response_data_cp scan_data_cp;
+		memset(&scan_data_cp, 0, sizeof(scan_data_cp));
+		memcpy(scan_data_cp.data, scan_rsp, scan_rsp_len);
+		scan_data_cp.length = scan_rsp_len;
 
-	adv_data_cp.length = adv_len;
+		LOGD("scan legacy response data[%d]:", scan_data_cp.length);
+		for (uint8_t i = 0; i < scan_data_cp.length; i ++) {
+			printf("%02x ", scan_data_cp.data[i]);
+		}
+		printf("\r\n");
 
-	LOGD("adv data[%d]: ", adv_data_cp.length);
-	for (uint8_t i = 0; i < adv_data_cp.length; i ++) {
-		printf("%02x ", adv_data_cp.data[i]);
+		memset(&rq, 0, sizeof(rq));
+		rq.ogf = OGF_LE_CTL;
+		rq.ocf = OCF_LE_SET_SCAN_RESPONSE_DATA;
+		rq.cparam = &scan_data_cp;
+		rq.clen = LE_SET_SCAN_RESPONSE_DATA_CP_SIZE;
+		rq.rparam = &status;
+		rq.rlen = 1;
+	} else {
+		// Setup extend scan response data
+		le_set_extend_scan_response_data_cp scan_data_cp;
+	
+		memset(&scan_data_cp, 0, sizeof(scan_data_cp));
+		memcpy(scan_data_cp.data, scan_rsp, scan_rsp_len);
+
+		scan_data_cp.handle = EXTEND_ADV_HANDLE;
+		scan_data_cp.operation = 0x03;
+		scan_data_cp.fragment = 0x01;
+		scan_data_cp.length = scan_rsp_len;
+
+		LOGD("scan extend response data[%d]:", scan_data_cp.length);
+		for (uint8_t i = 0; i < scan_data_cp.length; i ++) {
+			printf("%02x ", scan_data_cp.data[i]);
+		}
+		printf("\r\n");
+
+		memset(&rq, 0, sizeof(rq));
+		rq.ogf = OGF_LE_CTL;
+		rq.ocf = OCF_LE_SET_EXTEND_SCAN_RESPONSE_DATA;
+		rq.cparam = &scan_data_cp;
+		rq.clen = LE_SET_EXTEND_SCAN_RESPONSE_DATA_CP_SIZE;
+		rq.rparam = &status;
+		rq.rlen = 1;
 	}
-	printf("\r\n");
-
-	memset(&rq, 0, sizeof(rq));
-	rq.ogf = OGF_LE_CTL;
-	rq.ocf = OCF_LE_SET_ADVERTISING_DATA;
-	rq.cparam = &adv_data_cp;
-	rq.clen = 32;
-	rq.rparam = &status;
-	rq.rlen = 1;
-
-	int ret = hci_send_req(device_handle, &rq, 1000);
-
-	if(ret < 0)
-	{
-		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
-		hci_close_dev(device_handle);
-		return(1);
-	}
-
-	if (status) 
-	{
-		LOGE("LE set advertise returned status %d\n", status);
-		hci_close_dev(device_handle);
-		return(1);
-	}
-
-	// Setup scan response data
-	le_set_scan_response_data_cp scan_data_cp;
-	memset(&scan_data_cp, 0, sizeof(scan_data_cp));
-	memcpy(scan_data_cp.data, scan_rsp, scan_rsp_len);
-	scan_data_cp.length = scan_rsp_len;
-
-	LOGD("scan response data[%d]:", scan_data_cp.length);
-	for (uint8_t i = 0; i < scan_data_cp.length; i ++) {
-		printf("%02x ", scan_data_cp.data[i]);
-	}
-	printf("\r\n");
-
-	memset(&rq, 0, sizeof(rq));
-	rq.ogf = OGF_LE_CTL;
-	rq.ocf = OCF_LE_SET_SCAN_RESPONSE_DATA;
-	rq.cparam = &scan_data_cp;
-	rq.clen = LE_SET_SCAN_RESPONSE_DATA_CP_SIZE;
-	rq.rparam = &status;
-	rq.rlen = 1;
 
 	ret = hci_send_req(device_handle, &rq, 1000);
 
@@ -1135,57 +1201,144 @@ static void hci_if_set_adv_data(uint8_t * adv_data, uint8_t adv_len,
 		return(1);
 	}
 
-	hci_close_dev(device_handle);
+	// hci_close_dev(device_handle);
 }
 
-static void hci_if_set_adv_start(uint8_t adv_type, uint16_t max_interval, uint16_t min_interval)
+static void hci_if_set_advertising_data(uint8_t * adv_data, uint8_t adv_len)
 {
-	int device_id = hci_get_route(NULL);
-
-	int device_handle = 0;
-	if((device_handle = hci_open_dev(device_id)) < 0)
-	{
-		LOGE("Could not open device");
-		return;
+	if (device_handle == 0) {
+		int device_id = hci_get_route(NULL);
+		int ret = 0;
+		device_handle = 0;
+		
+		if((device_handle = hci_open_dev(device_id)) < 0)
+		{
+			LOGE("Could not open device");
+			return;
+		}
 	}
 
-	le_set_advertising_parameters_cp adv_params_cp;
-	memset(&adv_params_cp, 0, sizeof(adv_params_cp));
+	uint8_t status;
+	struct hci_request rq;
+	uint8_t data_length = 0;
+	memset(&rq, 0, sizeof(rq));
+	int ret = 0;
 
-	adv_params_cp.max_interval = (htobs(max_interval) * 16 / 10);
-	adv_params_cp.min_interval = (htobs(min_interval) * 16 / 10);
-	adv_params_cp.chan_map = 7;
-	adv_params_cp.advtype = adv_type;
+	if (hci_low_version) {
+		// Setup legacy advertising data
+		le_set_advertising_data_cp adv_data_cp;
+		memset(&adv_data_cp, 0, sizeof(adv_data_cp));
+		memcpy(adv_data_cp.data, adv_data, adv_len);
+
+		adv_data_cp.length = adv_len;
+
+		LOGD("legacy adv data[%d]: ", adv_data_cp.length);
+		for (uint8_t i = 0; i < adv_data_cp.length; i ++) {
+			printf("%02x ", adv_data_cp.data[i]);
+		}
+		printf("\r\n");
+
+		memset(&rq, 0, sizeof(rq));
+		rq.ogf = OGF_LE_CTL;
+		rq.ocf = OCF_LE_SET_ADVERTISING_DATA;
+		rq.cparam = &adv_data_cp;
+		rq.clen = 32;
+		rq.rparam = &status;
+		rq.rlen = 1;
+	} else {
+		// Setup extend advertising data
+		le_set_extend_advertising_data_cp adv_data_cp;
+		memset(&adv_data_cp, 0, sizeof(adv_data_cp));
+		memcpy(adv_data_cp.data, adv_data, adv_len);
+
+		adv_data_cp.handle = EXTEND_ADV_HANDLE;
+		adv_data_cp.operation = 0x03;
+		adv_data_cp.fragment = 0x01;
+		adv_data_cp.length = adv_len;
+
+		LOGD("extend adv data[%d]: ", adv_data_cp.length);
+		for (uint8_t i = 0; i < adv_data_cp.length; i ++) {
+			printf("%02x ", adv_data_cp.data[i]);
+		}
+		printf("\r\n");
+
+		memset(&rq, 0, sizeof(rq));
+		rq.ogf = OGF_LE_CTL;
+		rq.ocf = OCF_LE_SET_EXTEND_ADVERTISING_DATA;
+		rq.cparam = &adv_data_cp;
+		rq.clen = LE_SET_EXTEND_ADVERTISING_DATA_CP_SIZE;
+		rq.rparam = &status;
+		rq.rlen = 1;
+	}
+
+	ret = hci_send_req(device_handle, &rq, 1000);
+
+	if(ret < 0)
+	{
+		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
+		hci_close_dev(device_handle);
+		return(1);
+	}
+
+	if (status) 
+	{
+		LOGE("LE set advertise returned status %d\n", status);
+		hci_close_dev(device_handle);
+		return(1);
+	}
+
+	// hci_close_dev(device_handle);
+}
+
+static void hci_if_set_adv_enable()
+{
+	if (device_handle == 0) {
+		int device_id = hci_get_route(NULL);
+		int ret = 0;
+		device_handle = 0;
+		
+		if((device_handle = hci_open_dev(device_id)) < 0)
+		{
+			LOGE("Could not open device");
+			return;
+		}
+	}
 
 	uint8_t status;
 	struct hci_request rq;
 	memset(&rq, 0, sizeof(rq));
-	rq.ogf = OGF_LE_CTL;
-	rq.ocf = OCF_LE_SET_ADVERTISING_PARAMETERS;
-	rq.cparam = &adv_params_cp;
-	rq.clen = LE_SET_ADVERTISING_PARAMETERS_CP_SIZE;
-	rq.rparam = &status;
-	rq.rlen = 1;
+	int ret = 0;
 
-	int ret = hci_send_req(device_handle, &rq, 1000);
-	if (ret < 0)
-	{
-		hci_close_dev(device_handle);
-		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
-		return;
+	if (hci_low_version) {
+		le_set_advertise_enable_cp advertise_cp;
+		memset(&advertise_cp, 0, sizeof(advertise_cp));
+		advertise_cp.enable = 0x01;
+
+		memset(&rq, 0, sizeof(rq));
+		rq.ogf = OGF_LE_CTL;
+		rq.ocf = OCF_LE_SET_ADVERTISE_ENABLE;
+		rq.cparam = &advertise_cp;
+		rq.clen = LE_SET_ADVERTISE_ENABLE_CP_SIZE;
+		rq.rparam = &status;
+		rq.rlen = 1;
+	} else {
+		le_set_extend_advertise_enable_cp advertise_cp;
+		memset(&advertise_cp, 0, sizeof(advertise_cp));
+
+		advertise_cp.enable = 0x01;
+		advertise_cp.num_sets = 0x01;
+		advertise_cp.handle = EXTEND_ADV_HANDLE;
+		advertise_cp.duration = 0x00;
+		advertise_cp.max_ext_adv_events = 0x00;
+	
+		memset(&rq, 0, sizeof(rq));
+		rq.ogf = OGF_LE_CTL;
+		rq.ocf = OCF_LE_SET_EXTEND_ADVERTISE_ENABLE;
+		rq.cparam = &advertise_cp;
+		rq.clen = LE_SET_EXTEND_ADVERTISE_ENABLE_CP_SIZE;
+		rq.rparam = &status;
+		rq.rlen = 1;
 	}
-
-	le_set_advertise_enable_cp advertise_cp;
-	memset(&advertise_cp, 0, sizeof(advertise_cp));
-	advertise_cp.enable = 0x01;
-
-	memset(&rq, 0, sizeof(rq));
-	rq.ogf = OGF_LE_CTL;
-	rq.ocf = OCF_LE_SET_ADVERTISE_ENABLE;
-	rq.cparam = &advertise_cp;
-	rq.clen = LE_SET_ADVERTISE_ENABLE_CP_SIZE;
-	rq.rparam = &status;
-	rq.rlen = 1;
 
 	ret = hci_send_req(device_handle, &rq, 1000);
 
@@ -1195,17 +1348,107 @@ static void hci_if_set_adv_start(uint8_t adv_type, uint16_t max_interval, uint16
 		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
 		return;
 	}
+
+	// hci_close_dev(device_handle);
 }
 
-static void hci_if_set_adv_stop()
+static void hci_if_set_adv_param(uint8_t adv_type, uint16_t max_interval, uint16_t min_interval)
 {
-	int device_id = hci_get_route(NULL);
+	if (device_handle == 0) {
+		int device_id = hci_get_route(NULL);
+		int ret = 0;
+		device_handle = 0;
+		
+		if((device_handle = hci_open_dev(device_id)) < 0)
+		{
+			LOGE("Could not open device");
+			return;
+		}
+	}
 
-	int device_handle = 0;
-	if((device_handle = hci_open_dev(device_id)) < 0)
+	int ret = 0;
+	uint8_t status;
+	struct hci_request rq;
+	memset(&rq, 0, sizeof(rq));
+
+	if (hci_low_version) {
+		le_set_advertising_parameters_cp adv_params_cp;
+		memset(&adv_params_cp, 0, sizeof(adv_params_cp));
+
+		adv_params_cp.max_interval = (htobs(max_interval) * 16 / 10);
+		adv_params_cp.min_interval = (htobs(min_interval) * 16 / 10);
+		adv_params_cp.chan_map = 7;
+		adv_params_cp.advtype = adv_type;
+
+		rq.ogf = OGF_LE_CTL;
+		rq.ocf = OCF_LE_SET_ADVERTISING_PARAMETERS;
+		rq.cparam = &adv_params_cp;
+		rq.clen = LE_SET_ADVERTISING_PARAMETERS_CP_SIZE;
+		rq.rparam = &status;
+		rq.rlen = 1;
+	} else {
+		le_set_extend_advertising_parameters_cp adv_params_cp;
+		memset(&adv_params_cp, 0, sizeof(adv_params_cp));
+		uint16_t prop = 0x00;
+		adv_params_cp.handle = EXTEND_ADV_HANDLE;
+
+		if (adv_type == UHOS_BLE_ADV_TYPE_CONNECTABLE_UNDIRECTED)
+			prop = EXTEND_HCI_ADV_IND;
+		else if(adv_type == UHOS_BLE_ADV_TYPE_CONNECTABLE_DIRECTED_HDC)
+			prop = EXTEND_HCI_ADV_HIGH_DUTY_DIRECT_IND;
+		else if(adv_type == UHOS_BLE_ADV_TYPE_SCANNABLE_UNDIRECTED)
+			prop = EXTEND_HCI_ADV_SCAN_IND;		
+		else if(adv_type == UHOS_BLE_ADV_TYPE_NON_CONNECTABLE_UNDIRECTED)
+			prop = EXTEND_HCI_ADV_NONCONN_IND;
+		else if(adv_type == UHOS_BLE_ADV_TYPE_CONNECTABLE_DIRECTED_LDC)
+			prop = EXTEND_HCI_ADV_LOW_DUTY_DIRECT_IND;
+
+		adv_params_cp.properties = prop;
+		adv_params_cp.max_interval[2] = 0x00;
+		adv_params_cp.max_interval[1] = (htobs(max_interval) * 16 / 10) >> 8;
+		adv_params_cp.max_interval[0] = (htobs(max_interval) * 16 / 10);
+	
+		adv_params_cp.min_interval[2] = 0x00;
+		adv_params_cp.min_interval[1] = (htobs(min_interval) * 16 / 10) >> 8;
+		adv_params_cp.min_interval[0] = (htobs(min_interval) * 16 / 10);
+	
+		adv_params_cp.chan_map = 0x07;
+		adv_params_cp.tx_power = 0x7F;
+		adv_params_cp.primary_phy = 0x01;
+		adv_params_cp.secondary_phy = 0x01;
+
+		rq.ogf = OGF_LE_CTL;
+		rq.ocf = OCF_LE_SET_EXTEND_ADVERTISING_PARAMETERS;
+		rq.cparam = &adv_params_cp;
+		rq.clen = LE_SET_EXTEND_ADVERTISING_PARAMETERS_CP_SIZE;
+		rq.rparam = &status;
+		rq.rlen = 2;
+	}
+
+	ret = hci_send_req(device_handle, &rq, 1000);
+	if (ret < 0)
 	{
-		LOGE("Could not open device");
+		hci_close_dev(device_handle);
+		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
 		return;
+	}
+
+	// hci_close_dev(device_handle);
+}
+
+
+static void hci_if_set_adv_disable()
+{
+	if (device_handle == 0) {
+		int device_id = hci_get_route(NULL);
+		int ret = 0;
+		device_handle = 0;
+		
+		if((device_handle = hci_open_dev(device_id)) < 0)
+		{
+			LOGE("Could not open device");
+			return;
+		}
 	}
 
 	uint8_t status;
@@ -1213,17 +1456,36 @@ static void hci_if_set_adv_stop()
 	memset(&rq, 0, sizeof(rq));
 	int ret;
 
-	le_set_advertise_enable_cp advertise_cp;
-	memset(&advertise_cp, 0, sizeof(advertise_cp));
-	advertise_cp.enable = 0x00;
+	if (hci_low_version) {
+		le_set_advertise_enable_cp advertise_cp;
+		memset(&advertise_cp, 0, sizeof(advertise_cp));
+		advertise_cp.enable = 0x00;
 
-	memset(&rq, 0, sizeof(rq));
-	rq.ogf = OGF_LE_CTL;
-	rq.ocf = OCF_LE_SET_ADVERTISE_ENABLE;
-	rq.cparam = &advertise_cp;
-	rq.clen = LE_SET_ADVERTISE_ENABLE_CP_SIZE;
-	rq.rparam = &status;
-	rq.rlen = 1;
+		memset(&rq, 0, sizeof(rq));
+		rq.ogf = OGF_LE_CTL;
+		rq.ocf = OCF_LE_SET_ADVERTISE_ENABLE;
+		rq.cparam = &advertise_cp;
+		rq.clen = LE_SET_ADVERTISE_ENABLE_CP_SIZE;
+		rq.rparam = &status;
+		rq.rlen = 1;
+	} else {
+		le_set_extend_advertise_enable_cp advertise_cp;
+		memset(&advertise_cp, 0, sizeof(advertise_cp));
+
+		advertise_cp.enable = 0x00;
+		advertise_cp.num_sets = 0x01;
+		advertise_cp.handle = EXTEND_ADV_HANDLE;
+		advertise_cp.duration = 0x00;
+		advertise_cp.max_ext_adv_events = 0x00;
+
+		memset(&rq, 0, sizeof(rq));
+		rq.ogf = OGF_LE_CTL;
+		rq.ocf = OCF_LE_SET_EXTEND_ADVERTISE_ENABLE;
+		rq.cparam = &advertise_cp;
+		rq.clen = LE_SET_EXTEND_ADVERTISE_ENABLE_CP_SIZE;
+		rq.rparam = &status;
+		rq.rlen = 1;
+	}
 
 	ret = hci_send_req(device_handle, &rq, 1000);
 
@@ -1234,6 +1496,22 @@ static void hci_if_set_adv_stop()
 		return;
 	}
 }
+
+static void hci_if_set_adv_data(uint8_t * adv_data, uint8_t adv_len,
+									uint8_t * scan_rsp, uint8_t scan_rsp_len)
+{
+	// hci_if_set_scan_rsp(scan_rsp, scan_rsp_len);
+	// hci_if_set_advertising_data(adv_data, adv_len);
+}
+
+static void hci_if_set_adv_start(uint8_t adv_type, uint16_t max_interval, uint16_t min_interval)
+{
+	hci_if_set_adv_param(adv_type, max_interval, min_interval);
+	hci_if_set_scan_rsp(g_scan_rsp, g_scan_rsp_len);
+	hci_if_set_adv_enable();
+	hci_if_set_advertising_data(g_adv_data, g_adv_data_len);
+}
+
 void bluez_gap_set_adv_data(uint8_t const * adv, uint8_t adv_len, uint8_t const * scan_rsp, uint8_t scan_rsp_len) 
 {
 	memset(g_adv_data, 0x00, ADV_MAX_LENGTH);
@@ -1256,7 +1534,7 @@ void bluez_gap_set_adv_data(uint8_t const * adv, uint8_t adv_len, uint8_t const 
 	}
 
 	if (mgmt_low_version) {
-		hci_if_set_adv_data(g_adv_data, g_adv_data_len, g_scan_rsp, g_scan_rsp_len);
+		// hci_if_set_adv_data(g_adv_data, g_adv_data_len, g_scan_rsp, g_scan_rsp_len);
 		return;
 	}
 
@@ -1285,7 +1563,7 @@ void bluez_gap_set_adv_start(uint8_t adv_type, uint16_t max_interval, uint16_t m
 void bluez_gap_set_adv_stop()
 {
 	if (mgmt_low_version) {
-		hci_if_set_adv_stop();
+		hci_if_set_adv_disable();
 		return;
 	}
 	advertising_add_empty_adv(g_adv_type, 0x01);
@@ -1295,7 +1573,7 @@ void bluez_gap_set_adv_stop()
 void bluez_gap_set_adv_restart()
 {
 	if (mgmt_low_version) {
-		hci_if_set_adv_stop();
+		hci_if_set_adv_disable();
 		hci_if_set_adv_start(g_adv_type, g_max_interval, g_min_interval);
 		return;
 	}

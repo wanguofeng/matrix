@@ -59,8 +59,8 @@ void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param
 
 // 构造广播数据
 const uint8_t ble_adv_data[] = {
-	// // 广播包类型：Flags
-	// 0x02, BLE_AD_TYPE_FLAGS, 0x06, // 0000 0110
+	// 广播包类型：Flags
+	0x02, BLE_AD_TYPE_FLAGS, 0x04, // 0000 0110
 
 	// 广播包类型：Service UUIDs
 	0x03, BLE_AD_TYPE_16BIT_SERVICE_UUID,
