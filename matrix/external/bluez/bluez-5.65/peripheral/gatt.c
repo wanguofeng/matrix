@@ -458,8 +458,12 @@ static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
 					void *user_data)
 {
 	uint8_t ecode = 0;
+	
+	LOGW("opcode = %x, offset = %d, len = %d", opcode, offset, len);
 
-	if (!value) {
+	if (!value && (opcode == BT_ATT_OP_PREP_WRITE_REQ)) {
+		goto done;
+	} else if (!value) {
 		ecode = BT_ATT_ERROR_INVALID_ATTRIBUTE_VALUE_LEN;
 		goto done;
 	}
@@ -481,17 +485,18 @@ static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
 
 	gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
 
+	free(param);
+
 done:
 	gatt_db_attribute_write_result(attrib, id, ecode);
-
-	free(param);
 }
 
 static void conf_cb(void *user_data)
 {
 	LOGI("Received confirmation\n");
-	sem_t *sem = (sem_t *)user_data;
-	sem_post(sem);
+	uint8_t * tmp = (uint8_t *)user_data;
+	free(tmp);
+
 }
 
 bool bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, uint16_t length)
@@ -511,33 +516,25 @@ bool bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uin
 {
 	struct gatt_conn *conn = queue_peek_head(conn_list);
 
-	const uint8_t *tmp = malloc(length);
+	uint8_t *tmp = malloc(length);
 	memset(tmp, 0x00, length);
 	memcpy(tmp, value, length);
 
 	LOGI("%s handle = %04x, length = %d", __FUNCTION__, char_handle, length);
 	LOG_HEXDUMP_DBG(tmp, length, "indication tmp");
 
-	sem_t sem;
-	sem_init(&sem, 0, 0);
-	struct timespec ts;
-	clock_gettime(CLOCK_REALTIME, &ts);
-	ts.tv_sec += 2;
+	// sem_t sem;
+	// sem_init(&sem, 0, 0);
+	// struct timespec ts;
+	// clock_gettime(CLOCK_REALTIME, &ts);
+	// ts.tv_sec += 2;
 
 	bt_gatt_server_send_indication(conn->gatt,
 					char_handle, tmp,
 					length,
-					conf_cb, &sem, NULL);
-
-	if (sem_timedwait(&sem, &ts) == 0) {
-		free(tmp);
-		LOGE("send indication success!!!");
-		return true;
-	} else {
-		free(tmp);
-		LOGE("send indication timeout!!!");
-		return false;
-	}
+					conf_cb, tmp, NULL);
+	LOGI("send indication success!!!");
+	return true;
 }
 
 void bluez_gatts_set_mtu(uint16_t mtu)

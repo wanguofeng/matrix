@@ -966,97 +966,97 @@ static void recv_cmd(int fd, uint32_t events, void *user_data)
 			return;
 	}
 }
-static int hci_if_reset_controller()
-{
-	int device_id = hci_get_route(NULL);
 
-	int device_handle = 0;
+// static int hci_if_reset_controller()
+// {
+// 	int device_id = hci_get_route(NULL);
+
+// 	int device_handle = 0;
 	
-	if((device_handle = hci_open_dev(device_id)) < 0)
-	{
-		LOGE("Could not open device");
-		return 1;
-	}
+// 	if((device_handle = hci_open_dev(device_id)) < 0)
+// 	{
+// 		LOGE("Could not open device");
+// 		return 1;
+// 	}
 
-	uint8_t status;
-	struct hci_request rq;
-	uint8_t data_length = 0;
-	memset(&rq, 0, sizeof(rq));
+// 	uint8_t status;
+// 	struct hci_request rq;
+// 	uint8_t data_length = 0;
+// 	memset(&rq, 0, sizeof(rq));
 
-	// Reset Controller
-	rq.ogf = OGF_HOST_CTL;
-	rq.ocf = OCF_RESET;
-	rq.cparam = NULL;
-	rq.clen = 0;
-	rq.rparam = &status;
-	rq.rlen = 1;
+// 	// Reset Controller
+// 	rq.ogf = OGF_HOST_CTL;
+// 	rq.ocf = OCF_RESET;
+// 	rq.cparam = NULL;
+// 	rq.clen = 0;
+// 	rq.rparam = &status;
+// 	rq.rlen = 1;
 
-	int ret = hci_send_req(device_handle, &rq, 1000);
+// 	int ret = hci_send_req(device_handle, &rq, 1000);
 
-	if(ret < 0)
-	{
-		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
-		hci_close_dev(device_handle);
-		return(1);
-	}
+// 	if(ret < 0)
+// 	{
+// 		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
+// 		hci_close_dev(device_handle);
+// 		return(1);
+// 	}
 
-	if (status) 
-	{
-		LOGE("LE set advertise returned status %d\n", status);
-		hci_close_dev(device_handle);
-		return(1);
-	}
+// 	if (status) 
+// 	{
+// 		LOGE("LE set advertise returned status %d\n", status);
+// 		hci_close_dev(device_handle);
+// 		return(1);
+// 	}
 
-	bdaddr_t bdaddr;
-	char addr[18];
+// 	bdaddr_t bdaddr;
+// 	char addr[18];
 
-	hci_read_bd_addr(device_handle, &bdaddr, 10000);
-	ba2str(&bdaddr, addr);
-	LOGW("Controller bdaddr(%s)", addr);
+// 	hci_read_bd_addr(device_handle, &bdaddr, 10000);
+// 	ba2str(&bdaddr, addr);
+// 	LOGW("Controller bdaddr(%s)", addr);
 
-	memcpy(static_addr, (uint8_t *)&bdaddr, 6);
+// 	memcpy(static_addr, (uint8_t *)&bdaddr, 6);
 
-	hci_close_dev(device_handle);
-	
-	return 0;
-}
+// 	hci_close_dev(device_handle);
 
+// 	return 0;
+// }
 
-static void hci_if_set_random_address(uint8_t *addr)
-{
-	int device_id = hci_get_route(NULL);
-	uint8_t status;
-	struct hci_request rq;
-	int device_handle = 0;
+// static void hci_if_set_random_address(uint8_t *addr)
+// {
+// 	int device_id = hci_get_route(NULL);
+// 	uint8_t status;
+// 	struct hci_request rq;
+// 	int device_handle = 0;
 
-	if((device_handle = hci_open_dev(device_id)) < 0)
-	{
-		LOGE("Could not open device");
-		return;
-	}
+// 	if((device_handle = hci_open_dev(device_id)) < 0)
+// 	{
+// 		LOGE("Could not open device");
+// 		return;
+// 	}
 
-    le_set_random_address_cp cp;
+//     le_set_random_address_cp cp;
 
-	memset(&rq, 0, sizeof(rq));
-    memset(&cp, 0, sizeof(cp)); 
-    memcpy(cp.bdaddr.b, addr, 6); 
-    memset(&rq, 0, sizeof(rq)); 
-    rq.ogf = OGF_LE_CTL; 
-    rq.ocf = OCF_LE_SET_RANDOM_ADDRESS; 
-    rq.cparam = &cp; 
-    rq.clen = LE_SET_RANDOM_ADDRESS_CP_SIZE; 
-    rq.rparam = &status; 
-    rq.rlen = 1; 
+// 	memset(&rq, 0, sizeof(rq));
+//     memset(&cp, 0, sizeof(cp)); 
+//     memcpy(cp.bdaddr.b, addr, 6); 
+//     memset(&rq, 0, sizeof(rq)); 
+//     rq.ogf = OGF_LE_CTL; 
+//     rq.ocf = OCF_LE_SET_RANDOM_ADDRESS; 
+//     rq.cparam = &cp; 
+//     rq.clen = LE_SET_RANDOM_ADDRESS_CP_SIZE; 
+//     rq.rparam = &status; 
+//     rq.rlen = 1; 
 
-	int ret = hci_send_req(device_handle, &rq, 1000);
+// 	int ret = hci_send_req(device_handle, &rq, 1000);
 
-    if (status || ret < 0) 
-    { 
-        hci_close_dev(device_handle);
-		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
-		return;
-    } 
-}
+//     if (status || ret < 0) 
+//     { 
+//         hci_close_dev(device_handle);
+// 		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
+// 		return;
+//     } 
+// }
 
 #define OCF_LE_SET_EXTEND_ADVERTISING_PARAMETERS	0x0036
 typedef struct {
@@ -1116,27 +1116,22 @@ typedef struct {
 #define EXTEND_HCI_ADV_SCAN_IND					0x0012
 #define EXTEND_HCI_ADV_IND						0x0013
 
-
-static int device_handle = 0;
 static void hci_if_set_scan_rsp(uint8_t * scan_rsp, uint8_t scan_rsp_len)
 {
-	if (device_handle == 0) {
-		int device_id = hci_get_route(NULL);
-		int ret = 0;
-		device_handle = 0;
-		
-		if((device_handle = hci_open_dev(device_id)) < 0)
-		{
-			LOGE("Could not open device");
-			return;
-		}
+	int device_id = hci_get_route(NULL);
+	int ret = 0;
+	int device_handle = 0;
+	
+	if((device_handle = hci_open_dev(device_id)) < 0)
+	{
+		LOGE("Could not open device");
+		return;
 	}
 
 	uint8_t status;
 	struct hci_request rq;
 	uint8_t data_length = 0;
 	memset(&rq, 0, sizeof(rq));
-	int ret = 0;
 
 	if (hci_low_version) {
 		// Setup legacy scan response data
@@ -1201,28 +1196,25 @@ static void hci_if_set_scan_rsp(uint8_t * scan_rsp, uint8_t scan_rsp_len)
 		return(1);
 	}
 
-	// hci_close_dev(device_handle);
+	hci_close_dev(device_handle);
 }
 
 static void hci_if_set_advertising_data(uint8_t * adv_data, uint8_t adv_len)
 {
-	if (device_handle == 0) {
-		int device_id = hci_get_route(NULL);
-		int ret = 0;
-		device_handle = 0;
-		
-		if((device_handle = hci_open_dev(device_id)) < 0)
-		{
-			LOGE("Could not open device");
-			return;
-		}
+	int device_handle = 0;
+	int device_id = hci_get_route(NULL);
+	int ret = 0;
+	
+	if((device_handle = hci_open_dev(device_id)) < 0)
+	{
+		LOGE("Could not open device");
+		return;
 	}
 
 	uint8_t status;
 	struct hci_request rq;
 	uint8_t data_length = 0;
 	memset(&rq, 0, sizeof(rq));
-	int ret = 0;
 
 	if (hci_low_version) {
 		// Setup legacy advertising data
@@ -1287,27 +1279,24 @@ static void hci_if_set_advertising_data(uint8_t * adv_data, uint8_t adv_len)
 		return(1);
 	}
 
-	// hci_close_dev(device_handle);
+	hci_close_dev(device_handle);
 }
 
 static void hci_if_set_adv_enable()
 {
-	if (device_handle == 0) {
-		int device_id = hci_get_route(NULL);
-		int ret = 0;
-		device_handle = 0;
-		
-		if((device_handle = hci_open_dev(device_id)) < 0)
-		{
-			LOGE("Could not open device");
-			return;
-		}
+	int device_id = hci_get_route(NULL);
+	int ret = 0;
+	int device_handle = 0;
+	
+	if((device_handle = hci_open_dev(device_id)) < 0)
+	{
+		LOGE("Could not open device");
+		return;
 	}
 
 	uint8_t status;
 	struct hci_request rq;
 	memset(&rq, 0, sizeof(rq));
-	int ret = 0;
 
 	if (hci_low_version) {
 		le_set_advertise_enable_cp advertise_cp;
@@ -1349,24 +1338,21 @@ static void hci_if_set_adv_enable()
 		return;
 	}
 
-	// hci_close_dev(device_handle);
+	hci_close_dev(device_handle);
 }
 
 static void hci_if_set_adv_param(uint8_t adv_type, uint16_t max_interval, uint16_t min_interval)
 {
-	if (device_handle == 0) {
-		int device_id = hci_get_route(NULL);
-		int ret = 0;
-		device_handle = 0;
-		
-		if((device_handle = hci_open_dev(device_id)) < 0)
-		{
-			LOGE("Could not open device");
-			return;
-		}
+	int device_id = hci_get_route(NULL);
+	int ret = 0;
+	int device_handle = 0;
+	
+	if((device_handle = hci_open_dev(device_id)) < 0)
+	{
+		LOGE("Could not open device");
+		return;
 	}
 
-	int ret = 0;
 	uint8_t status;
 	struct hci_request rq;
 	memset(&rq, 0, sizeof(rq));
@@ -1433,28 +1419,25 @@ static void hci_if_set_adv_param(uint8_t adv_type, uint16_t max_interval, uint16
 		return;
 	}
 
-	// hci_close_dev(device_handle);
+	hci_close_dev(device_handle);
 }
 
 
 static void hci_if_set_adv_disable()
 {
-	if (device_handle == 0) {
-		int device_id = hci_get_route(NULL);
-		int ret = 0;
-		device_handle = 0;
-		
-		if((device_handle = hci_open_dev(device_id)) < 0)
-		{
-			LOGE("Could not open device");
-			return;
-		}
+	int device_id = hci_get_route(NULL);
+	int ret = 0;
+	int device_handle = 0;
+	
+	if((device_handle = hci_open_dev(device_id)) < 0)
+	{
+		LOGE("Could not open device");
+		return;
 	}
 
 	uint8_t status;
 	struct hci_request rq;
 	memset(&rq, 0, sizeof(rq));
-	int ret;
 
 	if (hci_low_version) {
 		le_set_advertise_enable_cp advertise_cp;
@@ -1495,6 +1478,8 @@ static void hci_if_set_adv_disable()
 		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
 		return;
 	}
+
+	hci_close_dev(device_handle);
 }
 
 static void hci_if_set_adv_data(uint8_t * adv_data, uint8_t adv_len,
