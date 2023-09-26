@@ -706,6 +706,7 @@ static void set_disconnect_rsp(uint8_t status, uint16_t len, const void *param,
 	if (len == 0 && status != 0) {
 		LOGE("Disconnect failed with status 0x%02x (%s)",
 						status, mgmt_errstr(status));
+		return;
 	}
 
 	if (len != sizeof(*rp)) {
