@@ -199,6 +199,8 @@ uint8_t conn_info_get_addr_by_handle(uint16_t conn_handle, struct addr_info * bd
 		bdaddr->addr_type = cp->bdaddr.addr_type;
 		return 0;
 	}
+
+	return -1;
 }
 
 uint16_t conn_info_get_handle_by_addr(const struct addr_info bdaddr)

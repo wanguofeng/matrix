@@ -319,24 +319,32 @@ uhos_ble_status_t uhos_ble_rssi_start(uhos_u16 conn_handle)
 
 uhos_ble_status_t uhos_ble_rssi_get_detect(uhos_u16 conn_handle, uhos_s8 *rssi)
 {
-    struct addr_info bdaddr;
-    conn_info_get_addr_by_handle(conn_handle, &bdaddr);
+    struct addr_info bdaddr = {0x00};
+
+    if (0 != conn_info_get_addr_by_handle(conn_handle, &bdaddr)) {
+        LOGI("read rssi conn_handle(%04x) is invaild", conn_handle);
+        return UHOS_BLE_ERROR;
+    }
+
     bluez_gap_get_conn_rssi(bdaddr.addr, bdaddr.addr_type, rssi);
-    return UHOS_BLE_SUCCESS;
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_rssi_get(uhos_u16 conn_handle, uhos_s8 *rssi)
 {
-    struct addr_info bdaddr;
-    conn_info_get_addr_by_handle(conn_handle, &bdaddr);
+    struct addr_info bdaddr = {0x00};
+
+    if (0 != conn_info_get_addr_by_handle(conn_handle, &bdaddr)) {
+        LOGI("read rssi conn_handle(%04x) is invaild", conn_handle);
+        return UHOS_BLE_ERROR;
+    }
+
     bluez_gap_get_conn_rssi(bdaddr.addr, bdaddr.addr_type, rssi);
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_rssi_stop(uhos_u16 conn_handle)
 {
-    
     return UHOS_BLE_SUCCESS;
 }
 
@@ -441,9 +449,13 @@ uhos_ble_status_t uhos_ble_gap_disconnect(uhos_u16 conn_handle)
     // mgmt disconncet;
     bdaddr_t bdaddr;
     uint8_t bdaddr_type;
-    struct addr_info info;
+    struct addr_info info = {0x00};
 
-    conn_info_get_addr_by_handle(conn_handle, &info);
+    if (0 != conn_info_get_addr_by_handle(conn_handle, &info)){
+        LOGE("disconnect conn_handle(%04x) is invaild", conn_handle);
+        return UHOS_BLE_ERROR;
+    }
+
     LOGW("disconnect conn_handle(%04x)", conn_handle);
     memcpy(bdaddr.b, info.addr, 6);
 
