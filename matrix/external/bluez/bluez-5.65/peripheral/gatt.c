@@ -36,7 +36,7 @@
 #include "peripheral/gatt.h"
 #include "peripheral/uh_ble.h"
 
-#define CONFIG_LOG_TAG "Bluez_Stack"
+#define CONFIG_LOG_TAG "Bluez_Stack_GATT"
 #include "peripheral/log.h"
 
 #define ATT_CID 4
@@ -47,6 +47,7 @@ struct gatt_conn {
 	struct sockaddr_l2 addr;
 	struct bt_att *att;
 	struct bt_gatt_server *gatt;
+	int conn_fd;
 // 	struct bt_gatt_client *client;
 };
 
@@ -90,7 +91,7 @@ static void gatt_conn_destroy(void *data)
 // 	bt_gatt_client_unref(conn->client);
 	bt_gatt_server_unref(conn->gatt);
 	bt_att_unref(conn->att);
-
+	close(conn->conn_fd);
 	free(conn);
 }
 
@@ -98,23 +99,25 @@ static void gatt_conn_disconnect(int err, void *user_data)
 {
 	struct gatt_conn *conn = user_data;
 
-	printf("Device disconnected: %s\n", strerror(err));
+	LOGI("Device disconnected: %s\n", strerror(err));
 
 	queue_remove(conn_list, conn);
+
 	gatt_conn_destroy(conn);
+
 }
 
 static void client_ready_callback(bool success, uint8_t att_ecode,
 							void *user_data)
 {
-	printf("GATT client discovery complete\n");
+	LOGI("GATT client discovery complete\n");
 }
 
 static void client_service_changed_callback(uint16_t start_handle,
 						uint16_t end_handle,
 						void *user_data)
 {
-	printf("GATT client service changed notification\n");
+	LOGI("GATT client service changed notification\n");
 }
 
 static struct gatt_conn *gatt_conn_new(int fd)
@@ -128,7 +131,7 @@ static struct gatt_conn *gatt_conn_new(int fd)
 
 	conn->att = bt_att_new(fd, false);
 	if (!conn->att) {
-		fprintf(stderr, "Failed to initialze ATT transport layer\n");
+		LOGE("Failed to initialze ATT transport layer\n");
 		free(conn);
 		return NULL;
 	}
@@ -140,7 +143,7 @@ static struct gatt_conn *gatt_conn_new(int fd)
 
 	conn->gatt = bt_gatt_server_new(gatt_db, conn->att, mtu, 0);
 	if (!conn->gatt) {
-		fprintf(stderr, "Failed to create GATT server\n");
+		LOGE("Failed to create GATT server\n");
 		bt_att_unref(conn->att);
 		free(conn);
 		return NULL;
@@ -148,7 +151,7 @@ static struct gatt_conn *gatt_conn_new(int fd)
 
 	// conn->client = bt_gatt_client_new(gatt_cache, conn->att, mtu, 0);
 	// if (!conn->client) {
-	// 	fprintf(stderr, "Failed to create GATT client\n");
+	// 	LOGE("Failed to create GATT client\n");
 	// 	bt_gatt_server_unref(conn->gatt);
 	// 	bt_att_unref(conn->att);
 	// 	free(conn);
@@ -180,32 +183,29 @@ static void att_conn_callback(int fd, uint32_t events, void *user_data)
 
 	new_fd = accept(att_fd, (struct sockaddr *) &addr, &addrlen);
 	if (new_fd < 0) {
-		fprintf(stderr, "Failed to accept new ATT connection: %m\n");
+		LOGE("Failed to accept new ATT connection: %m\n");
 		return;
 	}
 
-	LOGI("bdaddr(%02x:%02x:%02x:%02x:%02x:%02x) type(%02x)\n", addr.l2_bdaddr.b[5], addr.l2_bdaddr.b[4], addr.l2_bdaddr.b[3], 
-			addr.l2_bdaddr.b[2], addr.l2_bdaddr.b[1], addr.l2_bdaddr.b[0], 
-			addr.l2_bdaddr_type);
-
+	LOGI("bdaddr(%02x:%02x:%02x:%02x:%02x:%02x) type(%02x) fd(%02x)", addr.l2_bdaddr.b[5], addr.l2_bdaddr.b[4], addr.l2_bdaddr.b[3], 
+			addr.l2_bdaddr.b[2], addr.l2_bdaddr.b[1], addr.l2_bdaddr.b[0], addr.l2_bdaddr_type, new_fd);
 
 	conn = gatt_conn_new(new_fd);
 	if (!conn) {
-		fprintf(stderr, "Failed to create GATT connection\n");
+		LOGE("Failed to create GATT connection\n");
 		close(new_fd);
 		return;
 	}
-
+	conn->conn_fd = new_fd;
 	conn->addr = addr;
 	memcpy(conn->addr.l2_bdaddr.b, addr.l2_bdaddr.b, 6);
 	
 	if (!queue_push_tail(conn_list, conn)) {
-		fprintf(stderr, "Failed to add GATT connection\n");
+		LOGE("Failed to add GATT connection\n");
 		gatt_conn_destroy(conn);
-		close(new_fd);
 	}
 
-	printf("New device connected\n");
+	LOGI("New device connected\n");
 }
 
 static void gap_device_name_read(struct gatt_db_attribute *attrib,
@@ -549,6 +549,12 @@ void bluez_gatts_get_mtu(uint16_t *mtu)
 	struct gatt_conn *conn = queue_peek_head(conn_list);
 	if (conn != NULL)
 		*mtu = bt_gatt_server_get_mtu(conn->gatt);
+	else {
+		LOGE("current connection is not exist.");
+		*mtu = 0;
+	}
+
+	LOGI("gatt server mtu  = 0x%x", *mtu);
 }
 
 void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
@@ -605,7 +611,7 @@ void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 		uint8_t properties = 0;
 		gatt_db_read_t read_callback = NULL;
 		gatt_db_write_t write_callback = NULL;
-		bool is_cccd_exit = false;
+		bool is_cccd_exist = false;
 
 		if (char_db->char_property & UHOS_BLE_CHAR_PROP_BROADCAST)
 			properties |= BT_GATT_CHRC_PROP_BROADCAST;
@@ -630,12 +636,12 @@ void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 
 		if (char_db->char_property & UHOS_BLE_CHAR_PROP_NOTIFY) {
 			properties |= BT_GATT_CHRC_PROP_NOTIFY;
-			is_cccd_exit = true;
+			is_cccd_exist = true;
 		}
 
 		if (char_db->char_property & UHOS_BLE_CHAR_PROP_INDICATE) {
 			properties |= BT_GATT_CHRC_PROP_INDICATE;
-			is_cccd_exit = true;
+			is_cccd_exist = true;
 		}
 
 		if (char_db->char_property & UHOS_BLE_CHAR_PROP_AUTH_SIGNED_WRITE)
@@ -654,7 +660,7 @@ void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 
 		LOGI("char_value_handle = %04x", char_db->char_value_handle);
 
-		if (is_cccd_exit) {
+		if (is_cccd_exist) {
 			bt_uuid16_create(&uuid, GATT_CLIENT_CHARAC_CFG_UUID);
 			cccd = gatt_db_service_add_descriptor(service, &uuid,
 								BT_ATT_PERM_WRITE,
@@ -677,7 +683,7 @@ void bluez_gatts_server_start(void)
 	att_fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET | SOCK_CLOEXEC,
 							BTPROTO_L2CAP);
 	if (att_fd < 0) {
-		fprintf(stderr, "Failed to create ATT server socket: %m\n");
+		LOGE("Failed to create ATT server socket: %m\n");
 		return;
 	}
 
@@ -691,7 +697,7 @@ void bluez_gatts_server_start(void)
 													  static_addr[2], static_addr[1], static_addr[0]);
 	
 	if (bind(att_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-		fprintf(stderr, "Failed to bind ATT server socket: %m\n");
+		LOGE("Failed to bind ATT server socket: %m\n");
 		close(att_fd);
 		att_fd = -1;
 		return;
@@ -708,7 +714,7 @@ void bluez_gatts_server_start(void)
 	}
 
 	if (listen(att_fd, 1) < 0) {
-		fprintf(stderr, "Failed to listen on ATT server socket: %m\n");
+		LOGE("Failed to listen on ATT server socket: %m\n");
 		close(att_fd);
 		att_fd = -1;
 		return;

@@ -47,7 +47,7 @@
 
 // #define Bluez_Adapter_Version     "v1.0.14-alpha-202305121355"
 
-#define Bluez_Adapter_Version     "v1.0.31-rc-20230926"
+#define Bluez_Adapter_Version     "v1.0.32-rc-20230926"
 // #define Bluez_Adapter_Version     "v1.1.0-rc"
 // #define Bluez_Adapter_Version     "v1.1.0-release"
 
@@ -79,7 +79,7 @@ static void * bluez_daemon(void *arg)
     int exit_status = 0;
     uint16_t hci_index = *(uint16_t *) arg;
 
-    LOGW("Bluetooth periperhal ver %s, hci_index = %d", VERSION, hci_index);
+    // LOGW("Bluetooth periperhal ver %s, hci_index = %d", VERSION, hci_index);
     LOGW("Bluetooth Adapter Version %s", Bluez_Adapter_Version);
 
 	mainloop_init();
@@ -160,7 +160,7 @@ static void stack_gap_event_callback(uint16_t event, uint16_t index, uint16_t le
                 reason = UNKNOW_OTHER_ERROR;
             }
 
-            LOGE("disconnect handle = %04x", evt_param.conn_handle);
+            LOGE("disconnect handle = %04x, reason  = %d", evt_param.conn_handle, reason);
 
             evt_param.disconnect.reason = reason;
             conn_info_del_gatts(evt_param.conn_handle, bdaddr);
