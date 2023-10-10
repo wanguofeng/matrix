@@ -45,11 +45,7 @@
 #define CONFIG_LOG_TAG "Bluez_Adapter"
 #include "peripheral/log.h"
 
-// #define Bluez_Adapter_Version     "v1.0.14-alpha-202305121355"
-
-#define Bluez_Adapter_Version     "v1.0.32-rc-20230926"
-// #define Bluez_Adapter_Version     "v1.1.0-rc"
-// #define Bluez_Adapter_Version     "v1.1.0-release"
+#define Bluez_Adapter_Version     "v1.0.38-rc-20231010"
 
 /*
  * BLE COMMON
@@ -65,7 +61,7 @@ static void signal_callback(int signum, void *user_data)
 	switch (signum) {
 	case SIGINT:
 	case SIGTERM:
-		mainloop_quit();
+        bluez_gap_revert_settings();
 		break;
 	case SIGCHLD:
 		break;
@@ -79,19 +75,18 @@ static void * bluez_daemon(void *arg)
     int exit_status = 0;
     uint16_t hci_index = *(uint16_t *) arg;
 
-    // LOGW("Bluetooth periperhal ver %s, hci_index = %d", VERSION, hci_index);
     LOGW("Bluetooth Adapter Version %s", Bluez_Adapter_Version);
 
 	mainloop_init();
 	bluez_gap_init();
     bluez_gap_adapter_init(hci_index);
 
-    exit_status = mainloop_run();
-
-    LOGI("bluez daemon exit_status(%d)", exit_status);
-
-	bluez_gap_uinit();
+    exit_status = mainloop_run_with_signal(signal_callback, NULL);
+    
+    bluez_gap_uinit();
     bluez_gatts_server_stop();
+    conn_info_deinit();
+    LOGI("bluez daemon exit_status(%d)", exit_status);
 
     pthread_exit(NULL);
 }
@@ -292,34 +287,54 @@ uhos_ble_status_t uhos_ble_enable(void)
 
 uhos_ble_status_t uhos_ble_disable(void)
 {
-    if (bluez_daemon_tid == (pthread_t)0) {
+    LOGI("ble disable");
+    if (bluez_daemon_tid == (pthread_t) 0) {
         LOGI("bluez daemon isn't inited yet!");
         return UHOS_BLE_ERROR;
     }
-    
+
+    // mainloop_quit();
+    // mainloop_exit_success();
+    // bluez_gap_set_adv_stop();
+	// bluez_gap_uinit();
+    // bluez_gatts_server_stop();
+
     pthread_kill(bluez_daemon_tid, SIGTERM);
     pthread_join(bluez_daemon_tid, NULL);
     bluez_daemon_tid = (pthread_t)0;
-    conn_info_deinit();
     LOGI("bluez daemon exit successfully");
-
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_address_get(uhos_ble_addr_t mac)
-{   
+{
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
+
     bluez_gap_get_address((uint8_t * )mac);
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_rssi_start(uhos_u16 conn_handle)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
+
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_rssi_get_detect(uhos_u16 conn_handle, uhos_s8 *rssi)
 {
     struct addr_info bdaddr = {0x00};
+
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
 
     if (0 != conn_info_get_addr_by_handle(conn_handle, &bdaddr)) {
         LOGI("read rssi conn_handle(%04x) is invaild", conn_handle);
@@ -334,6 +349,11 @@ uhos_ble_status_t uhos_ble_rssi_get(uhos_u16 conn_handle, uhos_s8 *rssi)
 {
     struct addr_info bdaddr = {0x00};
 
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
+
     if (0 != conn_info_get_addr_by_handle(conn_handle, &bdaddr)) {
         LOGI("read rssi conn_handle(%04x) is invaild", conn_handle);
         return UHOS_BLE_ERROR;
@@ -345,11 +365,19 @@ uhos_ble_status_t uhos_ble_rssi_get(uhos_u16 conn_handle, uhos_s8 *rssi)
 
 uhos_ble_status_t uhos_ble_rssi_stop(uhos_u16 conn_handle)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_tx_power_set(uhos_u16 conn_handle, uhos_s8 tx_power)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
@@ -394,12 +422,22 @@ uhos_ble_status_t uhos_ble_gap_adv_data_set(
     uhos_u8 const *p_sr_data,
     uhos_u8 srdlen)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
+    
     bluez_gap_set_adv_data(p_data, dlen, p_sr_data, srdlen);
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gap_adv_start(uhos_ble_gap_adv_param_t *p_adv_param)
-{  
+{
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
+      
     bluez_gap_set_adv_start(p_adv_param->adv_type, p_adv_param->adv_interval_max, p_adv_param->adv_interval_min);
     LOGI("adv start\r\n\n");
     return UHOS_BLE_SUCCESS; 
@@ -407,6 +445,11 @@ uhos_ble_status_t uhos_ble_gap_adv_start(uhos_ble_gap_adv_param_t *p_adv_param)
 
 uhos_ble_status_t uhos_ble_gap_reset_adv_start(void)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
+
     bluez_gap_set_adv_restart();
     LOGI("adv reset\r\n\n");
     return UHOS_BLE_SUCCESS; 
@@ -414,6 +457,11 @@ uhos_ble_status_t uhos_ble_gap_reset_adv_start(void)
 
 uhos_ble_status_t uhos_ble_gap_adv_stop(void)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
+
     bluez_gap_set_adv_stop();
     LOGI("adv stop\r\n\n");
     return UHOS_BLE_SUCCESS; 
@@ -423,6 +471,11 @@ uhos_ble_status_t uhos_ble_gap_scan_start(
     uhos_ble_gap_scan_type_t scan_type,
     uhos_ble_gap_scan_param_t scan_param)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
+
     bluez_gap_set_scan_start(scan_type, scan_param.scan_interval,
                              scan_param.scan_window, scan_param.timeout);
     LOGI("scan start\r\n\n");
@@ -431,6 +484,11 @@ uhos_ble_status_t uhos_ble_gap_scan_start(
 
 uhos_ble_status_t uhos_ble_gap_scan_stop(void)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
+
     bluez_gap_set_scan_stop();
     LOGI("scan stop\r\n\n");
     return UHOS_BLE_SUCCESS;
@@ -440,12 +498,19 @@ uhos_ble_status_t uhos_ble_gap_update_conn_params(
     uhos_u16 conn_handle,
     uhos_ble_gap_conn_param_t conn_params)
 {
-    // mgmt 
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    } 
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gap_disconnect(uhos_u16 conn_handle)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     // mgmt disconncet;
     bdaddr_t bdaddr;
     uint8_t bdaddr_type;
@@ -510,12 +575,21 @@ uhos_ble_status_t uhos_ble_gatts_callback_register(uhos_ble_gatts_cb_t cb)
 
 static uhos_ble_status_t uhos_ble_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     bluez_gatts_add_service(p_srv_db);
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gatts_service_set(uhos_ble_gatts_db_t *uhos_ble_service_database)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
+
     uhos_ble_gatts_srv_db_t     *p_srv_db;
     uhos_u8                     srv_num = 0;
     uhos_ble_status_t           status;
@@ -549,6 +623,11 @@ uhos_ble_status_t uhos_ble_gatts_notify_or_indicate(
     uhos_u8 *p_value,
     uhos_u16 len)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
+
     if (offset == 0) {
         if (true == bluez_gatts_send_notification(char_value_handle, p_value, len)) {
             return UHOS_BLE_SUCCESS;
@@ -566,6 +645,10 @@ uhos_ble_status_t uhos_ble_gatts_notify_or_indicate(
 
 uhos_ble_status_t uhos_ble_gatts_mtu_default_set(uhos_u16 mtu)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     // bt_gatt_exchange_mtu(context->att, mtu, NULL, NULL, NULL);
     bluez_gatts_set_mtu(mtu);
     return UHOS_BLE_SUCCESS;
@@ -573,6 +656,11 @@ uhos_ble_status_t uhos_ble_gatts_mtu_default_set(uhos_u16 mtu)
 
 uhos_ble_status_t uhos_ble_gatts_mtu_get(uhos_u16 conn_handle, uhos_u16 *mtu_size)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
+
     bluez_gatts_get_mtu(mtu_size);
     return UHOS_BLE_SUCCESS;
 }
@@ -582,6 +670,10 @@ uhos_ble_status_t uhos_ble_gatts_mtu_get(uhos_u16 conn_handle, uhos_u16 *mtu_siz
 /**************************************************************************************************/
 uhos_ble_status_t uhos_ble_gattc_callback_register(uhos_ble_gattc_callback_t cb)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
@@ -590,6 +682,10 @@ uhos_ble_status_t uhos_ble_gattc_primary_service_discover_by_uuid(
     uhos_ble_handle_range_t *handle_range,
     uhos_ble_uuid_t *p_srv_uuid)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
@@ -598,6 +694,10 @@ uhos_ble_status_t uhos_ble_gattc_char_discover_by_uuid(
     uhos_ble_handle_range_t *handle_range,
     uhos_ble_uuid_t *p_char_uuid)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
@@ -605,6 +705,10 @@ uhos_ble_status_t uhos_ble_gattc_clt_cfg_descriptor_discover(
     uhos_u16 conn_handle,
     uhos_ble_handle_range_t *handle_range)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
@@ -613,6 +717,10 @@ uhos_ble_status_t uhos_ble_gattc_read_char_value_by_uuid(
     uhos_ble_handle_range_t *handle_range,
     uhos_ble_uuid_t *p_char_uuid)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
@@ -622,6 +730,10 @@ uhos_ble_status_t uhos_ble_gattc_write_with_rsp(
     uhos_u8 *p_value,
     uhos_u8 len)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
@@ -631,23 +743,37 @@ uhos_ble_status_t uhos_ble_gattc_write_cmd(
     uhos_u8 *p_value,
     uhos_u8 len)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gap_white_list_add(uhos_u8 *mac)
 {
-
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gap_white_list_remove(uhos_u8 *mac)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gap_white_list_clear(void)
 {
-
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
@@ -657,36 +783,64 @@ uhos_ble_status_t uhos_ble_gap_white_list_clear(void)
  */
 uhos_ble_status_t uhos_ble_gap_cancel_connection(void)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
 
 uhos_ble_status_t uhos_ble_gattc_write_without_rsp(uhos_u16 conn_handle, uhos_u16 char_value_handle, uhos_u8 *p_value, uhos_u16 len)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gattc_exchange_mtu(uhos_u16 conn_handle, uhos_u16 mtu)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gattc_mtu_get(uhos_u16 conn_handle, uhos_u16 *mtu_size)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gattc_primary_service_discover_all(uhos_u16 conn_handle, void *req)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gattc_char_discover_of_service(uhos_u16 conn_handle, uhos_ble_handle_range_t *char_handle_range)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }
 
 uhos_ble_status_t uhos_ble_gattc_read_char_value(uhos_u16 conn_handle, uhos_u16 char_value_handle)
 {
+    if (bluez_daemon_tid == (pthread_t)0) {
+        LOGW("bluez daemon isn't init yet.");
+        return UHOS_BLE_ERROR;
+    }
     return UHOS_BLE_SUCCESS;
 }

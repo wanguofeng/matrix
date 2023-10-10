@@ -18,6 +18,25 @@ uhos_u16 conn_handle = 0x0000;
 uhos_ble_addr_t           peer_addr;
 uhos_ble_addr_type_t      type;
 
+// 构造广播数据
+const uint8_t ble_adv_data[] = {
+	// 广播包类型：Flags
+	0x02, BLE_AD_TYPE_FLAGS, 0x04, // 0000 0110
+
+	// 广播包类型：Service UUIDs
+	0x03, BLE_AD_TYPE_16BIT_SERVICE_UUID,
+	(BLE_SERVICE_UUID & 0xFF), ((BLE_SERVICE_UUID >> 8) & 0xFF),
+
+	// 广播包类型：Complete Local Name
+	0x07, BLE_AD_TYPE_COMPLETE_LOCAL_NAME, 'w', 'a', 'n', 'w', 'a', 'n'
+};
+
+// 构造扫描响应数据
+const uint8_t ble_scan_rsp[] = {
+	// 广播包类型：Complete Local Name
+	0x07, BLE_AD_TYPE_COMPLETE_LOCAL_NAME, 'w', 'a', 'n', 'w', 'a', 'n'
+};
+
 void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param)
 {
 	switch(evt)
@@ -57,27 +76,10 @@ void uh_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param
 	}
 }
 
-// 构造广播数据
-const uint8_t ble_adv_data[] = {
-	// 广播包类型：Flags
-	0x02, BLE_AD_TYPE_FLAGS, 0x04, // 0000 0110
-
-	// 广播包类型：Service UUIDs
-	0x03, BLE_AD_TYPE_16BIT_SERVICE_UUID,
-	(BLE_SERVICE_UUID & 0xFF), ((BLE_SERVICE_UUID >> 8) & 0xFF),
-
-	// 广播包类型：Complete Local Name
-	0x07, BLE_AD_TYPE_COMPLETE_LOCAL_NAME, 'w', 'a', 'n', 'w', 'a', 'n'
-};
-
-// 构造扫描响应数据
-const uint8_t ble_scan_rsp[] = {
-	// 广播包类型：Complete Local Name
-	0x07, BLE_AD_TYPE_COMPLETE_LOCAL_NAME, 'w', 'a', 'n', 'w', 'a', 'n'
-};
-
 int main(int argc, char *argv[])
 {
+	uhos_ble_gap_callback_register(uh_ble_gap_callback);
+init:
 	uhos_ble_enable();
 	uhos_u8 static_addr[6] = {0x00};
 	uhos_ble_address_get(static_addr);
@@ -101,8 +103,6 @@ int main(int argc, char *argv[])
 		.timeout = 0x00,
 	};
 
-	uhos_ble_gap_callback_register(uh_ble_gap_callback);
-
 	uint16_t count = 0;
 
 	while(1)
@@ -116,14 +116,20 @@ int main(int argc, char *argv[])
 			uhos_ble_rssi_get(conn_handle, &rssi);
 			uhos_ble_gatts_mtu_get(conn_handle, &mtu);
 			LOGI("mtu is %d", mtu);
-			if (count == 0xFFF) {
-				uhos_ble_gap_disconnect(conn_handle);
-				count = 0;
+			if (count == 10) {
+				// uhos_ble_gap_disconnect(conn_handle);
+				count = 0;				
+				// uhos_ble_gap_adv_stop();
+				uhos_ble_disable();
+				break;
 			}
+			// else if (count == 30) {
+			// 	uhos_ble_gap_adv_stop();
+			// 	uhos_ble_gap_adv_data_set(ble_adv_data, sizeof(ble_adv_data), ble_scan_rsp, sizeof(ble_scan_rsp));
+			// 	uhos_ble_gap_adv_start(&param);
+			// }
 		}
 	}
 
-	uhos_ble_gap_adv_stop();
-	uhos_ble_disable();
 	return 0;
 }

@@ -496,7 +496,6 @@ static void conf_cb(void *user_data)
 	LOGI("Received confirmation\n");
 	uint8_t * tmp = (uint8_t *)user_data;
 	free(tmp);
-
 }
 
 bool bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, uint16_t length)
@@ -520,8 +519,8 @@ bool bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uin
 	memset(tmp, 0x00, length);
 	memcpy(tmp, value, length);
 
-	LOGI("%s handle = %04x, length = %d", __FUNCTION__, char_handle, length);
-	LOG_HEXDUMP_DBG(tmp, length, "indication tmp");
+	LOGI("handle = %04x, length = %d", char_handle, length);
+	LOG_HEXDUMP_DBG(tmp, length, "indication");
 
 	// sem_t sem;
 	// sem_init(&sem, 0, 0);

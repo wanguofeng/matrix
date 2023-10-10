@@ -49,6 +49,7 @@
 #define HCI_VERSION_5_4	0x0D
 
 static int event_fd = 0;
+static uint32_t pre_current_settings = 0;
 
 static struct queue *pending_cmd_list = NULL;
 static struct queue *pending_cmd_tlv_list = NULL;
@@ -443,6 +444,8 @@ static void read_info_complete(uint8_t status, uint16_t len,
 
 	LOGD("Selecting index %u, hci_version = %x", index, rp->version);
 
+
+
 	if (HCI_VERSION_4_2 >= rp->version) {
 		hci_low_version = true;
 	}
@@ -506,6 +509,9 @@ static void read_info_complete(uint8_t status, uint16_t len,
 							NULL, NULL, NULL);
 	}
 
+	pre_current_settings = current_settings;
+
+#if 1
 	if (current_settings & MGMT_SETTING_CONNECTABLE) {
 		val = 0x00;
 		mgmt_send(mgmt, MGMT_OP_SET_CONNECTABLE, index, 1, &val,
@@ -539,6 +545,7 @@ static void read_info_complete(uint8_t status, uint16_t len,
 
 	clear_long_term_keys(mgmt_index);
     clear_identity_resolving_keys(mgmt_index);
+#endif
 
 	mgmt_send(mgmt, MGMT_OP_SET_STATIC_ADDRESS, index,
 	 				6, static_addr, NULL, NULL, NULL);
@@ -966,6 +973,34 @@ static void recv_cmd(int fd, uint32_t events, void *user_data)
 		free(mgmt_tlv);
 			return;
 	}
+}
+
+static void set_bredr_complete(uint8_t status, uint16_t len,
+					const void *param, void *user_data)
+{
+	uint16_t index = PTR_TO_UINT(user_data);
+
+	if (status) {
+		LOGE("Setting BR/EDR for index %u failed: %s\n",
+						index, mgmt_errstr(status));
+		return;
+	}
+	LOGI("set bredr success");
+}
+
+static void set_le_complete(uint8_t status, uint16_t len,
+					const void *param, void *user_data)
+{
+	uint16_t index = PTR_TO_UINT(user_data);
+
+	if (status) {
+		LOGE("Setting LE for index %u failed: %s\n",
+						index, mgmt_errstr(status));
+		return;
+	}
+
+	LOGI("close le feature success.");
+	mainloop_quit();
 }
 
 // static int hci_if_reset_controller()
@@ -1677,11 +1712,59 @@ void bluez_gap_adapter_init(uint16_t hci_index)
 	}
 }
 
+void bluez_gap_revert_settings(void)
+{
+	if (!mgmt)
+		return;
+	
+	uint8_t val = 0;
+
+	val = 0x00;
+	mgmt_send(mgmt, MGMT_OP_SET_POWERED, mgmt_index, 1, &val,
+						NULL, NULL, NULL);
+
+	val = 0x01;
+	mgmt_send(mgmt, MGMT_OP_SET_BREDR, mgmt_index, 1, &val,
+						set_bredr_complete, NULL, NULL);
+
+	val = 0x00;
+	mgmt_send(mgmt, MGMT_OP_SET_LE, mgmt_index, 1, &val,
+						set_le_complete, NULL, NULL);
+
+#if 0
+	if (pre_current_settings & MGMT_SETTING_CONNECTABLE) {
+		val = 0x01;
+		mgmt_send(mgmt, MGMT_OP_SET_CONNECTABLE, mgmt_index, 1, &val,
+							NULL, NULL, NULL);
+	}
+
+	if (pre_current_settings & MGMT_SETTING_SECURE_CONN) {
+		val = 0x01;
+		mgmt_send(mgmt, MGMT_OP_SET_SECURE_CONN, mgmt_index, 1, &val,
+							NULL, NULL, NULL);
+	}
+
+	if (pre_current_settings & MGMT_SETTING_DEBUG_KEYS) {
+		val = 0x01;
+		mgmt_send(mgmt, MGMT_OP_SET_DEBUG_KEYS, mgmt_index, 1, &val,
+							NULL, NULL, NULL);
+	}
+
+	if ((pre_current_settings & MGMT_SETTING_BONDABLE)) {
+		val = 0x01;
+		mgmt_send(mgmt, MGMT_OP_SET_BONDABLE, mgmt_index, 1, &val,
+							NULL, NULL, NULL);
+	}
+#endif
+}
+
 void bluez_gap_uinit(void)
 {
 	if (!mgmt)
 		return;
-
+	
+	LOGI("gap uinit");
+	
     mgmt_unref(mgmt);
 	mgmt = NULL;
 
@@ -1692,4 +1775,9 @@ void bluez_gap_uinit(void)
 
 	if (pending_cmd_tlv_list != NULL)
         queue_destroy(pending_cmd_tlv_list, free);
+
+	memset(g_adv_data, 0x00, ADV_MAX_LENGTH);
+	memset(g_scan_rsp, 0x00, ADV_MAX_LENGTH);
+	g_adv_data_len = 0;
+	g_scan_rsp_len = 0;
 }
