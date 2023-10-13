@@ -501,14 +501,20 @@ static void conf_cb(void *user_data)
 bool bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, uint16_t length)
 {
 	struct gatt_conn *conn = queue_peek_head(conn_list);
-
+	bool ret = 0;
 	LOGI("%s handle = %04x, length = %d", __FUNCTION__, char_handle, length);
 	
-	LOG_HEXDUMP_DBG(value, length, "notification");
+	uint8_t *tmp = malloc(length);
+	memset(tmp, 0x00, length);
+	memcpy(tmp, value, length);
 
-	return bt_gatt_server_send_notification(conn->gatt,
-					char_handle, value,
-					length, false);
+	LOG_HEXDUMP_DBG(tmp, length, "notification");
+
+	ret = bt_gatt_server_send_notification(conn->gatt,
+					char_handle, tmp, length, false);
+
+	free(tmp);
+	return ret;
 }
 
 bool bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uint16_t length)
