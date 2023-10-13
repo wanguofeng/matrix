@@ -983,9 +983,9 @@ static void set_bredr_complete(uint8_t status, uint16_t len,
 	if (status) {
 		LOGE("Setting BR/EDR for index %u failed: %s\n",
 						index, mgmt_errstr(status));
-		return;
+	} else {
+		LOGI("set bredr success");
 	}
-	LOGI("set bredr success");
 }
 
 static void set_le_complete(uint8_t status, uint16_t len,
@@ -996,11 +996,10 @@ static void set_le_complete(uint8_t status, uint16_t len,
 	if (status) {
 		LOGE("Setting LE for index %u failed: %s\n",
 						index, mgmt_errstr(status));
-		return;
+	} else {
+		LOGI("close le feature success.");
+		mainloop_quit();
 	}
-
-	LOGI("close le feature success.");
-	mainloop_quit();
 }
 
 // static int hci_if_reset_controller()
@@ -1714,19 +1713,24 @@ void bluez_gap_adapter_init(uint16_t hci_index)
 
 void bluez_gap_revert_settings(void)
 {
+	LOGI("revert br/edr settings.");
+
 	if (!mgmt)
 		return;
 	
 	uint8_t val = 0;
 
+	LOGI("close power settings.");
 	val = 0x00;
 	mgmt_send(mgmt, MGMT_OP_SET_POWERED, mgmt_index, 1, &val,
 						NULL, NULL, NULL);
 
+	LOGI("open br/edr settings.");
 	val = 0x01;
 	mgmt_send(mgmt, MGMT_OP_SET_BREDR, mgmt_index, 1, &val,
 						set_bredr_complete, NULL, NULL);
-
+	
+	LOGI("close le settings.");
 	val = 0x00;
 	mgmt_send(mgmt, MGMT_OP_SET_LE, mgmt_index, 1, &val,
 						set_le_complete, NULL, NULL);
@@ -1756,6 +1760,7 @@ void bluez_gap_revert_settings(void)
 							NULL, NULL, NULL);
 	}
 #endif
+
 }
 
 void bluez_gap_uinit(void)
