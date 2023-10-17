@@ -131,9 +131,10 @@ static int8_t mgmt_send_wrapper(struct mgmt *mgmt, uint16_t opcode, uint16_t ind
 	mgmt_cmd->user_data = user_data;
 	mgmt_cmd->destroy = destroy;
 
-	if (!queue_push_head(pending_cmd_list, mgmt_cmd)) {
+	if (!queue_push_tail(pending_cmd_list, mgmt_cmd)) {
 		LOGE("add to pending_cmd_list failed");
 	}
+
 	int ret = eventfd_write(event_fd, 1);
 	if (ret < 0) {
 		LOGE("write event fd fail:%s", strerror(errno));
@@ -158,7 +159,7 @@ static int8_t mgmt_send_tlv_wrapper(struct mgmt *mgmt, uint16_t opcode, uint16_t
 	mgmt_send_tlv->user_data = user_data;
 	mgmt_send_tlv->destroy = destroy;
 
-	if (!queue_push_head(pending_cmd_tlv_list, mgmt_send_tlv)) {
+	if (!queue_push_tail(pending_cmd_tlv_list, mgmt_send_tlv)) {
 		LOGE("add to pending_cmd_tlv_list failed");
 	}
 	int ret = eventfd_write(event_fd, 1);
@@ -975,29 +976,34 @@ static void recv_cmd(int fd, uint32_t events, void *user_data)
 	}
 }
 
+static void power_complete(uint8_t status, uint16_t len,
+					const void *param, void *user_data)
+{
+	if (status) {
+		LOGE("power off failed: %s\n", mgmt_errstr(status));
+	} else {
+		LOGI("power off success");
+	}
+}
+
 static void set_bredr_complete(uint8_t status, uint16_t len,
 					const void *param, void *user_data)
 {
-	uint16_t index = PTR_TO_UINT(user_data);
-
 	if (status) {
-		LOGE("Setting BR/EDR for index %u failed: %s\n",
-						index, mgmt_errstr(status));
+		LOGE("setting BR/EDR failed: %s\n", mgmt_errstr(status));
 	} else {
-		LOGI("set bredr success");
+		LOGI("enable BR/EDR success");
 	}
 }
 
 static void set_le_complete(uint8_t status, uint16_t len,
 					const void *param, void *user_data)
 {
-	uint16_t index = PTR_TO_UINT(user_data);
-
 	if (status) {
-		LOGE("Setting LE for index %u failed: %s\n",
-						index, mgmt_errstr(status));
+		LOGE("setting LE failed: %s\n", mgmt_errstr(status));
+		mainloop_quit();
 	} else {
-		LOGI("close le feature success.");
+		LOGI("disable LE feature success.");
 		mainloop_quit();
 	}
 }
@@ -1673,7 +1679,7 @@ void bluez_gap_set_static_address(uint8_t addr[6])
 			static_addr[5], static_addr[4], static_addr[3],
 			static_addr[2], static_addr[1], static_addr[0]);
 
-	mgmt_send_wrapper(mgmt, MGMT_OP_SET_STATIC_ADDRESS, mgmt_index,
+	mgmt_send(mgmt, MGMT_OP_SET_STATIC_ADDRESS, mgmt_index,
 						6, static_addr, NULL, NULL, NULL);
 }
 
@@ -1711,56 +1717,39 @@ void bluez_gap_adapter_init(uint16_t hci_index)
 	}
 }
 
-void bluez_gap_revert_settings(void)
+void bluez_gap_quit(void)
 {
-	LOGI("revert br/edr settings.");
+	LOGI("gap quit, revert br/edr settings.");
 
 	if (!mgmt)
 		return;
-	
-	uint8_t val = 0;
 
-	LOGI("close power settings.");
-	val = 0x00;
-	mgmt_send(mgmt, MGMT_OP_SET_POWERED, mgmt_index, 1, &val,
-						NULL, NULL, NULL);
+	{
+		uint8_t * val = malloc(1);
+		memset(val, 0x00, 1);
 
-	LOGI("open br/edr settings.");
-	val = 0x01;
-	mgmt_send(mgmt, MGMT_OP_SET_BREDR, mgmt_index, 1, &val,
-						set_bredr_complete, NULL, NULL);
-	
-	LOGI("close le settings.");
-	val = 0x00;
-	mgmt_send(mgmt, MGMT_OP_SET_LE, mgmt_index, 1, &val,
-						set_le_complete, NULL, NULL);
-
-#if 0
-	if (pre_current_settings & MGMT_SETTING_CONNECTABLE) {
-		val = 0x01;
-		mgmt_send(mgmt, MGMT_OP_SET_CONNECTABLE, mgmt_index, 1, &val,
-							NULL, NULL, NULL);
+		LOGI("disable power settings.");
+		mgmt_send_wrapper(mgmt, MGMT_OP_SET_POWERED, mgmt_index, 1, val,
+							power_complete, NULL, NULL);
 	}
 
-	if (pre_current_settings & MGMT_SETTING_SECURE_CONN) {
-		val = 0x01;
-		mgmt_send(mgmt, MGMT_OP_SET_SECURE_CONN, mgmt_index, 1, &val,
-							NULL, NULL, NULL);
+	{
+		uint8_t * val = malloc(1);
+		memset(val, 0x01, 1);
+
+		LOGI("enable br/edr settings.");
+		mgmt_send_wrapper(mgmt, MGMT_OP_SET_BREDR, mgmt_index, 1, val,
+							set_bredr_complete, NULL, NULL);
 	}
 
-	if (pre_current_settings & MGMT_SETTING_DEBUG_KEYS) {
-		val = 0x01;
-		mgmt_send(mgmt, MGMT_OP_SET_DEBUG_KEYS, mgmt_index, 1, &val,
-							NULL, NULL, NULL);
-	}
+	{
+		uint8_t * val = malloc(1);
+		memset(val, 0x00, 1);
 
-	if ((pre_current_settings & MGMT_SETTING_BONDABLE)) {
-		val = 0x01;
-		mgmt_send(mgmt, MGMT_OP_SET_BONDABLE, mgmt_index, 1, &val,
-							NULL, NULL, NULL);
+		LOGI("disable le settings.");
+		mgmt_send_wrapper(mgmt, MGMT_OP_SET_LE, mgmt_index, 1, val,
+							set_le_complete, NULL, NULL);
 	}
-#endif
-
 }
 
 void bluez_gap_uinit(void)

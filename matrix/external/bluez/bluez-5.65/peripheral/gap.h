@@ -23,7 +23,7 @@ typedef void (*bluez_gap_cmd_callback_func)(uint16_t cmd, int8_t status, uint16_
 
 void bluez_gap_init(void);
 void bluez_gap_uinit(void);
-void bluez_gap_revert_settings(void);
+void bluez_gap_quit(void);
 void bluez_gap_adapter_init(uint16_t index);
 void bluez_gap_get_address(uint8_t *mac);
 void bluez_gap_register_callback(bluez_gap_cmd_callback_func cmd_cb, bluez_gap_event_callback_func event_cb);

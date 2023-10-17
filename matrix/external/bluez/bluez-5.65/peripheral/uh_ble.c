@@ -45,7 +45,7 @@
 #define CONFIG_LOG_TAG "Bluez_Adapter"
 #include "peripheral/log.h"
 
-#define Bluez_Adapter_Version     "v1.0.40-rc-20231013"
+#define Bluez_Adapter_Version     "v1.0.49-rc-20231017"
 
 /*
  * BLE COMMON
@@ -56,19 +56,20 @@ static uhos_ble_status_t uhos_ble_gatts_callback(uhos_ble_gatts_evt_t evt, uhos_
 static pthread_t bluez_daemon_tid = (pthread_t)0;
 static sem_t bluez_adapter_sem;
 
-static void signal_callback(int signum, void *user_data)
-{
-	switch (signum) {
-	case SIGINT:
-	case SIGTERM:
-        bluez_gap_revert_settings();
-		break;
-	case SIGCHLD:
-		break;
-	}
-}
-
-#define VERSION "5.65"
+// static void signal_callback(int signum, void *user_data)
+// {
+//     LOGI("receive signal %d", signum);
+// 	switch (signum) {
+// 	case SIGINT:
+// 	case SIGTERM:
+//     case 40:
+//         LOGI("receive SIGTERM signal");
+//         bluez_gap_quit();
+// 		break;
+// 	case SIGCHLD:
+// 		break;
+// 	}
+// }
 
 static void * bluez_daemon(void *arg)
 {
@@ -81,11 +82,12 @@ static void * bluez_daemon(void *arg)
 	bluez_gap_init();
     bluez_gap_adapter_init(hci_index);
 
-    exit_status = mainloop_run_with_signal(signal_callback, NULL);
+    exit_status = mainloop_run();
     
     bluez_gap_uinit();
     bluez_gatts_server_stop();
     conn_info_deinit();
+
     LOGI("bluez daemon exit_status(%d)", exit_status);
 
     pthread_exit(NULL);
@@ -299,7 +301,13 @@ uhos_ble_status_t uhos_ble_disable(void)
 	// bluez_gap_uinit();
     // bluez_gatts_server_stop();
 
-    pthread_kill(bluez_daemon_tid, SIGTERM);
+    // LOGI("disable bluez daemon tid = %d", bluez_daemon_tid);
+    // int ret = pthread_kill(bluez_daemon_tid, 40);
+
+    // if (ret != 0)
+    //     printf("ret = %d, error code = %s", strerror(errno));
+
+    bluez_gap_quit();
     pthread_join(bluez_daemon_tid, NULL);
     bluez_daemon_tid = (pthread_t)0;
     LOGI("bluez daemon exit successfully");
