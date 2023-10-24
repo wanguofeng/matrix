@@ -45,7 +45,7 @@
 #define CONFIG_LOG_TAG "Bluez_Adapter"
 #include "peripheral/log.h"
 
-#define Bluez_Adapter_Version     "v1.0.49-rc-20231017"
+#define Bluez_Adapter_Version     "v1.0.50-rc-20231019"
 
 /*
  * BLE COMMON

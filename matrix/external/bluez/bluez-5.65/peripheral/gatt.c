@@ -462,33 +462,31 @@ static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
 	LOGW("opcode = %x, offset = %d, len = %d", opcode, offset, len);
 
 	if (!value && (opcode == BT_ATT_OP_PREP_WRITE_REQ)) {
-		goto done;
+		LOGW("for prep write request, do nothing temporary!");
 	} else if (!value) {
 		ecode = BT_ATT_ERROR_INVALID_ATTRIBUTE_VALUE_LEN;
-		goto done;
 	}
 
-	uint16_t handle = gatt_db_attribute_get_handle(attrib);
-	LOGD("%s handle = %04x", __FUNCTION__, handle);
-
-	uhos_ble_gatts_evt_t evt = UHOS_BLE_GATTS_EVT_WRITE;
-
-	uhos_ble_gatts_evt_param_t *param = malloc(sizeof(uhos_ble_gatts_evt_param_t));
-	param->write.value_handle = handle;
-	param->write.len = len;
-	param->write.offset = offset;
-	param->write.data = value;
-
-	struct gatt_conn *conn = queue_peek_head(conn_list);
-
-	LOG_HEXDUMP_DBG(value, len, "gatt write");
-
-	gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
-
-	free(param);
-
-done:
 	gatt_db_attribute_write_result(attrib, id, ecode);
+
+	if (ecode == 0) {
+		uint16_t handle = gatt_db_attribute_get_handle(attrib);
+
+		LOGD("%s handle = %04x", __FUNCTION__, handle);
+
+		uhos_ble_gatts_evt_t evt = UHOS_BLE_GATTS_EVT_WRITE;
+		uhos_ble_gatts_evt_param_t *param = malloc(sizeof(uhos_ble_gatts_evt_param_t));
+		param->write.value_handle = handle;
+		param->write.len = len;
+		param->write.offset = offset;
+		param->write.data = value;
+
+		struct gatt_conn *conn = queue_peek_head(conn_list);
+		LOG_HEXDUMP_DBG(value, len, "gatt write");
+		gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
+
+		free(param);
+	}
 }
 
 static void conf_cb(void *user_data)
