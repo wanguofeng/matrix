@@ -24,6 +24,7 @@
 #include <poll.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <sched.h>
 
 #include "src/shared/mgmt.h"
 
@@ -45,7 +46,7 @@
 #define CONFIG_LOG_TAG "Bluez_Adapter"
 #include "peripheral/log.h"
 
-#define Bluez_Adapter_Version     "v1.0.50-rc-20231019"
+#define Bluez_Adapter_Version     "v1.0.52-rc-20231031"
 
 /*
  * BLE COMMON
@@ -55,6 +56,8 @@ static uhos_ble_status_t uhos_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_
 static uhos_ble_status_t uhos_ble_gatts_callback(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_evt_param_t *param);
 static pthread_t bluez_daemon_tid = (pthread_t)0;
 static sem_t bluez_adapter_sem;
+
+static pthread_mutex_t adapter_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // static void signal_callback(int signum, void *user_data)
 // {
@@ -274,7 +277,21 @@ uhos_ble_status_t uhos_ble_enable(void)
     sem_init(&bluez_adapter_sem, 0, 0);
     bluez_gap_register_callback(stack_gap_cmd_callback, stack_gap_event_callback);
     bluez_gatts_register_callback(stack_gatt_server_callback);
-    ret = pthread_create(&bluez_daemon_tid, NULL, bluez_daemon, &hci_index);
+
+    pthread_attr_t bluez_attr;
+    struct sched_param pa;
+
+    pthread_attr_init(&bluez_attr);
+    pa.sched_priority = sched_get_priority_max(SCHED_RR);
+
+    pthread_attr_setschedpolicy(&bluez_attr, SCHED_RR);
+    pthread_attr_setschedparam(&bluez_attr, &pa);
+
+    struct sched_param param;
+    pthread_attr_getschedparam(&bluez_attr, &param);
+    LOGI("current thread prioprity is %d", param.sched_priority);
+
+    ret = pthread_create(&bluez_daemon_tid, &bluez_attr, bluez_daemon, &hci_index);
     if (ret != 0) {
         LOGI("Error creating thread!");
         sem_destroy(&bluez_adapter_sem);
@@ -321,7 +338,10 @@ uhos_ble_status_t uhos_ble_address_get(uhos_ble_addr_t mac)
         return UHOS_BLE_ERROR;
     }
 
+	pthread_mutex_lock(&adapter_mutex);
     bluez_gap_get_address((uint8_t * )mac);
+    pthread_mutex_unlock(&adapter_mutex);
+
     return UHOS_BLE_SUCCESS;
 }
 
@@ -338,37 +358,51 @@ uhos_ble_status_t uhos_ble_rssi_start(uhos_u16 conn_handle)
 uhos_ble_status_t uhos_ble_rssi_get_detect(uhos_u16 conn_handle, uhos_s8 *rssi)
 {
     struct addr_info bdaddr = {0x00};
+    uhos_ble_status_t ret = 0;
 
     if (bluez_daemon_tid == (pthread_t)0) {
         LOGW("bluez daemon isn't init yet.");
         return UHOS_BLE_ERROR;
     }
 
+	pthread_mutex_lock(&adapter_mutex);
     if (0 != conn_info_get_addr_by_handle(conn_handle, &bdaddr)) {
         LOGI("read rssi conn_handle(%04x) is invaild", conn_handle);
-        return UHOS_BLE_ERROR;
+        ret = UHOS_BLE_ERROR;
+        goto END;
     }
 
     bluez_gap_get_conn_rssi(bdaddr.addr, bdaddr.addr_type, rssi);
-    return UHOS_BLE_SUCCESS;
+    ret = UHOS_BLE_SUCCESS;
+
+END:
+	pthread_mutex_unlock(&adapter_mutex);
+    return ret;
 }
 
 uhos_ble_status_t uhos_ble_rssi_get(uhos_u16 conn_handle, uhos_s8 *rssi)
 {
     struct addr_info bdaddr = {0x00};
+    uhos_ble_status_t ret = 0;
 
     if (bluez_daemon_tid == (pthread_t)0) {
         LOGW("bluez daemon isn't init yet.");
         return UHOS_BLE_ERROR;
     }
 
+	pthread_mutex_lock(&adapter_mutex);
     if (0 != conn_info_get_addr_by_handle(conn_handle, &bdaddr)) {
         LOGI("read rssi conn_handle(%04x) is invaild", conn_handle);
-        return UHOS_BLE_ERROR;
+        ret = UHOS_BLE_ERROR;
+        goto END;
     }
 
     bluez_gap_get_conn_rssi(bdaddr.addr, bdaddr.addr_type, rssi);
-    return UHOS_BLE_SUCCESS;
+    ret = UHOS_BLE_SUCCESS;
+
+END:
+	pthread_mutex_unlock(&adapter_mutex);
+    return ret;
 }
 
 uhos_ble_status_t uhos_ble_rssi_stop(uhos_u16 conn_handle)
@@ -434,8 +468,10 @@ uhos_ble_status_t uhos_ble_gap_adv_data_set(
         LOGW("bluez daemon isn't init yet.");
         return UHOS_BLE_ERROR;
     }
-    
+
+    pthread_mutex_lock(&adapter_mutex);
     bluez_gap_set_adv_data(p_data, dlen, p_sr_data, srdlen);
+    pthread_mutex_unlock(&adapter_mutex);
     return UHOS_BLE_SUCCESS;
 }
 
@@ -445,9 +481,11 @@ uhos_ble_status_t uhos_ble_gap_adv_start(uhos_ble_gap_adv_param_t *p_adv_param)
         LOGW("bluez daemon isn't init yet.");
         return UHOS_BLE_ERROR;
     }
-      
+
+    pthread_mutex_lock(&adapter_mutex);
     bluez_gap_set_adv_start(p_adv_param->adv_type, p_adv_param->adv_interval_max, p_adv_param->adv_interval_min);
     LOGI("adv start\r\n\n");
+    pthread_mutex_unlock(&adapter_mutex);
     return UHOS_BLE_SUCCESS; 
 }
 
@@ -457,9 +495,10 @@ uhos_ble_status_t uhos_ble_gap_reset_adv_start(void)
         LOGW("bluez daemon isn't init yet.");
         return UHOS_BLE_ERROR;
     }
-
+    pthread_mutex_lock(&adapter_mutex);
     bluez_gap_set_adv_restart();
     LOGI("adv reset\r\n\n");
+    pthread_mutex_unlock(&adapter_mutex);
     return UHOS_BLE_SUCCESS; 
 }
 
@@ -469,9 +508,10 @@ uhos_ble_status_t uhos_ble_gap_adv_stop(void)
         LOGW("bluez daemon isn't init yet.");
         return UHOS_BLE_ERROR;
     }
-
+    pthread_mutex_lock(&adapter_mutex);
     bluez_gap_set_adv_stop();
     LOGI("adv stop\r\n\n");
+    pthread_mutex_unlock(&adapter_mutex);
     return UHOS_BLE_SUCCESS; 
 }
 
@@ -483,10 +523,11 @@ uhos_ble_status_t uhos_ble_gap_scan_start(
         LOGW("bluez daemon isn't init yet.");
         return UHOS_BLE_ERROR;
     }
-
+    pthread_mutex_lock(&adapter_mutex);
     bluez_gap_set_scan_start(scan_type, scan_param.scan_interval,
                              scan_param.scan_window, scan_param.timeout);
     LOGI("scan start\r\n\n");
+    pthread_mutex_unlock(&adapter_mutex);
     return UHOS_BLE_SUCCESS;
 }
 
@@ -496,9 +537,10 @@ uhos_ble_status_t uhos_ble_gap_scan_stop(void)
         LOGW("bluez daemon isn't init yet.");
         return UHOS_BLE_ERROR;
     }
-
+    pthread_mutex_lock(&adapter_mutex);
     bluez_gap_set_scan_stop();
     LOGI("scan stop\r\n\n");
+    pthread_mutex_unlock(&adapter_mutex);
     return UHOS_BLE_SUCCESS;
 }
 
@@ -523,17 +565,24 @@ uhos_ble_status_t uhos_ble_gap_disconnect(uhos_u16 conn_handle)
     bdaddr_t bdaddr;
     uint8_t bdaddr_type;
     struct addr_info info = {0x00};
+    uhos_ble_status_t ret = 0;
+
+    pthread_mutex_lock(&adapter_mutex);
 
     if (0 != conn_info_get_addr_by_handle(conn_handle, &info)){
         LOGE("disconnect conn_handle(%04x) is invaild", conn_handle);
-        return UHOS_BLE_ERROR;
+        ret = UHOS_BLE_ERROR;
+        goto END;
     }
 
     LOGW("disconnect conn_handle(%04x)", conn_handle);
     memcpy(bdaddr.b, info.addr, 6);
-
     bluez_gap_disconnect(&bdaddr, info.addr_type);
-    return UHOS_BLE_SUCCESS;
+    ret = UHOS_BLE_SUCCESS;
+
+END:
+    pthread_mutex_unlock(&adapter_mutex);
+    return ret;
 }
 
 uhos_ble_status_t uhos_ble_gap_connect(uhos_ble_gap_scan_param_t scan_param,
@@ -636,18 +685,22 @@ uhos_ble_status_t uhos_ble_gatts_notify_or_indicate(
         return UHOS_BLE_ERROR;
     }
 
+    bool ret = false;
+
+    pthread_mutex_lock(&adapter_mutex);
+
     if (offset == 0) {
-        if (true == bluez_gatts_send_notification(char_value_handle, p_value, len)) {
-            return UHOS_BLE_SUCCESS;
-        } else {
-            return UHOS_BLE_ERROR;
-        }
+        ret = bluez_gatts_send_notification(char_value_handle, p_value, len);
     } else {
-        if (true == bluez_gatts_send_indication(char_value_handle, p_value, len)) {
-            return UHOS_BLE_SUCCESS;
-        } else {
-            return UHOS_BLE_ERROR;
-        }
+        ret = bluez_gatts_send_indication(char_value_handle, p_value, len);
+    }
+
+    pthread_mutex_unlock(&adapter_mutex);
+    
+    if(ret) {
+        return UHOS_BLE_SUCCESS;
+    } else {
+        return UHOS_BLE_ERROR;
     }
 }
 
@@ -658,7 +711,9 @@ uhos_ble_status_t uhos_ble_gatts_mtu_default_set(uhos_u16 mtu)
         return UHOS_BLE_ERROR;
     }
     // bt_gatt_exchange_mtu(context->att, mtu, NULL, NULL, NULL);
+    pthread_mutex_lock(&adapter_mutex);
     bluez_gatts_set_mtu(mtu);
+    pthread_mutex_unlock(&adapter_mutex);
     return UHOS_BLE_SUCCESS;
 }
 
@@ -669,7 +724,10 @@ uhos_ble_status_t uhos_ble_gatts_mtu_get(uhos_u16 conn_handle, uhos_u16 *mtu_siz
         return UHOS_BLE_ERROR;
     }
 
+    pthread_mutex_lock(&adapter_mutex);
     bluez_gatts_get_mtu(mtu_size);
+    pthread_mutex_unlock(&adapter_mutex);
+
     return UHOS_BLE_SUCCESS;
 }
 
