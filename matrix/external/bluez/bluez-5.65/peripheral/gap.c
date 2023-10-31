@@ -702,7 +702,6 @@ static void get_conn_info_rsp(uint8_t status, uint16_t len, const void *param,
 		LOGD("\tRSSI %d\tTX power %d\tmaximum TX power %d",
 				rp->rssi, rp->tx_power, rp->max_tx_power);
 	}
-
 }
 
 static void set_disconnect_rsp(uint8_t status, uint16_t len, const void *param,
@@ -1670,6 +1669,7 @@ void bluez_gap_get_conn_rssi(uint8_t *peer_addr, uint8_t type, uint8_t *rssi)
 END:
 	sem_destroy(&sync.sem);
 	free(sync.userdata);
+	LOGI("get conn rssi = %d", *rssi);
 }
 
 void bluez_gap_set_static_address(uint8_t addr[6])

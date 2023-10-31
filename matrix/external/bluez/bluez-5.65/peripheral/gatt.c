@@ -328,12 +328,10 @@ static void gatt_descriptor_ccc_write_cb(struct gatt_db_attribute *attrib,
 
 	if (!value || len != 2) {
 		error = BT_ATT_ERROR_INVALID_ATTRIBUTE_VALUE_LEN;
-		goto done;
 	}
 
 	if (offset) {
 		error = BT_ATT_ERROR_INVALID_OFFSET;
-		goto done;
 	}
 
 	// if (value[0] == 0x00)
@@ -343,27 +341,29 @@ static void gatt_descriptor_ccc_write_cb(struct gatt_db_attribute *attrib,
 	// else
 	// 	error = 0x80;
 
-	uint16_t handle = gatt_db_attribute_get_handle(attrib);
-	LOGD("%s handle = %04x", __FUNCTION__, handle);
-
-	uhos_ble_gatts_evt_t evt = UHOS_BLE_GATTS_EVT_CCCD_UPDATE;
-
-	uhos_ble_gatts_evt_param_t *param = malloc(sizeof(uhos_ble_gatts_evt_param_t));
-	param->write.value_handle = handle - 1;
-	param->write.len = len;
-	param->write.offset = offset;
-	param->write.data = value;
-	param->cccd = (uint32_t)*value;
-
-	struct gatt_conn *conn = queue_peek_head(conn_list);
-
-	gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
-
-done:
 	gatt_db_attribute_write_result(attrib, id, error);
-	
-	free(param);
+
+	if (error == 0) {
+		uint16_t handle = gatt_db_attribute_get_handle(attrib);
+		LOGD("%s handle = %04x", __FUNCTION__, handle);
+
+		uhos_ble_gatts_evt_t evt = UHOS_BLE_GATTS_EVT_CCCD_UPDATE;
+
+		uhos_ble_gatts_evt_param_t *param = malloc(sizeof(uhos_ble_gatts_evt_param_t));
+		param->write.value_handle = handle - 1;
+		param->write.len = len;
+		param->write.offset = offset;
+		param->write.data = value;
+		param->cccd = (uint32_t)*value;
+
+		struct gatt_conn *conn = queue_peek_head(conn_list);
+
+		gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
+
+		free(param);
+	}
 }
+
 // static void conf_cb(void *user_data)
 // {
 // 	LOGI("Received confirmation\n");
