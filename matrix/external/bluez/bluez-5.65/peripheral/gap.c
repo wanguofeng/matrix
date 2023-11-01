@@ -1423,7 +1423,11 @@ static void hci_if_set_adv_param(uint8_t adv_type, uint16_t max_interval, uint16
 		le_set_advertising_parameters_cp adv_params_cp;
 		memset(&adv_params_cp, 0, sizeof(adv_params_cp));
 
-		adv_params_cp.max_interval = (htobs(max_interval) * 16 / 10);
+		if ((min_interval + 10) <= max_interval)
+			adv_params_cp.max_interval = (htobs(min_interval + 10) * 16 / 10);
+		else
+			adv_params_cp.max_interval = (htobs(max_interval) * 16 / 10);
+
 		adv_params_cp.min_interval = (htobs(min_interval) * 16 / 10);
 		adv_params_cp.chan_map = 7;
 		adv_params_cp.advtype = adv_type;
