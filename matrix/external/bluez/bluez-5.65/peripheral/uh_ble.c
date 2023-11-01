@@ -46,7 +46,7 @@
 #define CONFIG_LOG_TAG "Bluez_Adapter"
 #include "peripheral/log.h"
 
-#define Bluez_Adapter_Version     "v1.0.52-rc-20231031"
+#define Bluez_Adapter_Version     "v1.0.57-rc-20231101"
 
 /*
  * BLE COMMON
@@ -671,6 +671,13 @@ uhos_ble_status_t uhos_ble_gatts_service_set(uhos_ble_gatts_db_t *uhos_ble_servi
 
     return UHOS_BLE_SUCCESS;
 }
+extern void bluez_gatts_send_notify_indicate(
+	uint16_t conn_handle,
+    uint16_t srv_handle,
+    uint16_t char_value_handle,
+    uint8_t offset,
+    uint8_t *p_value,
+    uint16_t len);
 
 uhos_ble_status_t uhos_ble_gatts_notify_or_indicate(
     uhos_u16 conn_handle,
@@ -689,11 +696,7 @@ uhos_ble_status_t uhos_ble_gatts_notify_or_indicate(
 
     pthread_mutex_lock(&adapter_mutex);
 
-    if (offset == 0) {
-        ret = bluez_gatts_send_notification(char_value_handle, p_value, len);
-    } else {
-        ret = bluez_gatts_send_indication(char_value_handle, p_value, len);
-    }
+    bluez_gatts_send_notify_indicate(conn_handle, srv_handle, char_value_handle, offset, p_value, len);
 
     pthread_mutex_unlock(&adapter_mutex);
     

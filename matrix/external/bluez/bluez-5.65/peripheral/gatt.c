@@ -484,16 +484,18 @@ static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
 		struct gatt_conn *conn = queue_peek_head(conn_list);
 		LOG_HEXDUMP_DBG(value, len, "gatt write");
 		gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
-
+		LOGI("%s done", __FUNCTION__);
 		free(param);
 	}
 }
 
 static void conf_cb(void *user_data)
 {
-	LOGI("Received confirmation\n");
-	uint8_t * tmp = (uint8_t *)user_data;
-	free(tmp);
+	LOGI("Received Confirmation\n");
+	// sem_t *psem = (sem_t *)user_data;
+
+	// if (psem != NULL)
+	// 	sem_post(psem);
 }
 
 bool bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, uint16_t length)
@@ -518,6 +520,7 @@ bool bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, u
 bool bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uint16_t length)
 {
 	struct gatt_conn *conn = queue_peek_head(conn_list);
+	bool ret = false;
 
 	uint8_t *tmp = malloc(length);
 	memset(tmp, 0x00, length);
@@ -535,8 +538,19 @@ bool bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uin
 	bt_gatt_server_send_indication(conn->gatt,
 					char_handle, tmp,
 					length,
-					conf_cb, tmp, NULL);
-	LOGI("send indication success!!!");
+					conf_cb, NULL, NULL);
+
+    // int result = sem_timedwait(&sem, &ts);
+	// if (result == 0) {
+	// 	LOGI("send indication success!!!");
+	// 	ret = true;
+	// } else {
+	// 	LOGI("send indication timeout!!!");
+	// 	ret = false;
+	// }
+
+    // sem_destroy(&sem);
+	free(tmp);
 	return true;
 }
 

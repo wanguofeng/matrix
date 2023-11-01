@@ -53,6 +53,7 @@ static uint32_t pre_current_settings = 0;
 
 static struct queue *pending_cmd_list = NULL;
 static struct queue *pending_cmd_tlv_list = NULL;
+static struct queue *pending_gatts_list = NULL;
 
 static struct mgmt *mgmt = NULL;
 static uint16_t mgmt_index = MGMT_INDEX_NONE;
@@ -114,6 +115,15 @@ typedef struct _mgmt_send_tlv_async {
 	void *user_data;
 	mgmt_destroy_func_t destroy;
 } mgmt_send_tlv_async;
+
+typedef struct _gatts_send_async {
+	uint16_t conn_handle;
+	uint16_t srv_handle;
+	uint16_t char_value_handle;
+	uint8_t offset;
+	uint8_t *p_value;
+	uint16_t len;
+} gatts_send_async;
 
 static int8_t mgmt_send_wrapper(struct mgmt *mgmt, uint16_t opcode, uint16_t index,
 				uint16_t length, const void *param,
@@ -973,6 +983,18 @@ static void recv_cmd(int fd, uint32_t events, void *user_data)
 		free(mgmt_tlv);
 			return;
 	}
+
+	gatts_send_async * msg = queue_pop_head(pending_gatts_list);
+	if (msg != NULL) {
+		if (msg->offset == 0) {
+			bluez_gatts_send_notification(msg->char_value_handle, msg->p_value, msg->len);
+		} else {
+			bluez_gatts_send_indication(msg->char_value_handle, msg->p_value, msg->len);
+		}
+		free(msg->p_value);
+		free(msg);
+		return;
+	}
 }
 
 static void power_complete(uint8_t status, uint16_t len,
@@ -1644,6 +1666,38 @@ void bluez_gap_disconnect(const bdaddr_t *bdaddr, uint8_t bdaddr_type)
 						set_disconnect_rsp, NULL, NULL);
 }
 
+void bluez_gatts_send_notify_indicate(
+	uint16_t conn_handle,
+	uint16_t srv_handle,
+	uint16_t char_value_handle,
+	uint8_t offset,
+	uint8_t *p_value,
+	uint16_t len)
+{
+	gatts_send_async *msg = malloc(sizeof(gatts_send_async));
+
+	msg->conn_handle = conn_handle;
+	msg->srv_handle = srv_handle;
+	msg->char_value_handle = char_value_handle;
+	msg->offset = offset;
+	msg->len = len;
+	msg->p_value = malloc(len);
+	memcpy(msg->p_value, p_value, len);
+
+	if (!queue_push_tail(pending_gatts_list, msg)) {
+		LOGE("add to pending_gatts_list failed");
+		return;
+	}
+
+	int ret = eventfd_write(event_fd, 1);
+	if (ret < 0) {
+		LOGE("write event fd fail:%s", strerror(errno));
+		return;
+	}
+
+	return;
+}
+
 void bluez_gap_get_conn_rssi(uint8_t *peer_addr, uint8_t type, uint8_t *rssi)
 {
 	struct mgmt_cp_get_conn_info *cp = malloc(sizeof(*cp));
@@ -1706,6 +1760,8 @@ void bluez_gap_adapter_init(uint16_t hci_index)
 
 	pending_cmd_list = queue_new();
 	pending_cmd_tlv_list = queue_new();
+	pending_gatts_list = queue_new();
+
 	event_fd = eventfd(0, EFD_SEMAPHORE|EFD_NONBLOCK);
 	// LOGW("event_fd = %d", event_fd);
 
@@ -1769,6 +1825,9 @@ void bluez_gap_uinit(void)
 
 	if (pending_cmd_tlv_list != NULL)
         queue_destroy(pending_cmd_tlv_list, free);
+
+	if (pending_gatts_list != NULL)
+		queue_destroy(pending_gatts_list, free);
 
 	memset(g_adv_data, 0x00, ADV_MAX_LENGTH);
 	memset(g_scan_rsp, 0x00, ADV_MAX_LENGTH);
