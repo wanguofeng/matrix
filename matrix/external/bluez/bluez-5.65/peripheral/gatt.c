@@ -358,7 +358,9 @@ static void gatt_descriptor_ccc_write_cb(struct gatt_db_attribute *attrib,
 
 		struct gatt_conn *conn = queue_peek_head(conn_list);
 
-		gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
+		if (conn != NULL) {
+			gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
+		}
 
 		free(param);
 	}
@@ -437,7 +439,9 @@ static void gatt_character_read_cb(struct gatt_db_attribute *attrib,
 
 	struct gatt_conn *conn = queue_peek_head(conn_list);
 
-	gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
+	if (conn != NULL) {
+		gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
+	}
 
 	LOGI("gatt read len = %d", len);
 
@@ -483,7 +487,11 @@ static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
 
 		struct gatt_conn *conn = queue_peek_head(conn_list);
 		LOG_HEXDUMP_DBG(value, len, "gatt write");
-		gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
+
+		if (conn != NULL) {
+			gatts_callback(evt, param, conn->addr.l2_bdaddr.b, conn->addr.l2_bdaddr_type);
+		}
+
 		LOGI("%s done", __FUNCTION__);
 		free(param);
 	}
@@ -504,6 +512,11 @@ bool bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, u
 	bool ret = 0;
 	LOGI("%s handle = %04x, length = %d", __FUNCTION__, char_handle, length);
 	
+	if (conn == NULL) {
+		LOGW("current connection has been disconnected.");
+		return false;
+	}
+
 	uint8_t *tmp = malloc(length);
 	memset(tmp, 0x00, length);
 	memcpy(tmp, value, length);
@@ -521,6 +534,11 @@ bool bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uin
 {
 	struct gatt_conn *conn = queue_peek_head(conn_list);
 	bool ret = false;
+
+	if (conn == NULL) {
+		LOGW("current connection has been disconnected.");
+		return false;
+	}
 
 	uint8_t *tmp = malloc(length);
 	memset(tmp, 0x00, length);
