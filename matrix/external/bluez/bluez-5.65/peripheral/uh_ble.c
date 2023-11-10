@@ -240,12 +240,13 @@ static void stack_gap_cmd_callback(uint16_t cmd, int8_t status, uint16_t len,
             bdaddr.addr_type = rp->addr.type;
 
             evt_param.conn_handle = conn_info_get_handle_by_addr(bdaddr);
-            uint8_t reason = MGMT_DEV_DISCONN_LOCAL_HOST;
+            uint8_t reason = UHOS_BLE_LOCAL_HOST_TERMINATED;
             evt_param.disconnect.reason = reason;
             conn_info_del_gatts(evt_param.conn_handle, bdaddr);
             uhos_ble_gap_callback(UHOS_BLE_GAP_EVT_DISCONNET, &evt_param);
             break;
         }
+
         default:
             break;
     }
