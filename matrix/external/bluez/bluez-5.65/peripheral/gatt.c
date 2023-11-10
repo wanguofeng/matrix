@@ -463,7 +463,7 @@ static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
 {
 	uint8_t ecode = 0;
 	
-	LOGW("opcode = %x, offset = %d, len = %d", opcode, offset, len);
+	LOGW("opcode = %x, offset = %d, len = %ld", opcode, offset, len);
 
 	if (!value && (opcode == BT_ATT_OP_PREP_WRITE_REQ)) {
 		LOGW("for prep write request, do nothing temporary!");

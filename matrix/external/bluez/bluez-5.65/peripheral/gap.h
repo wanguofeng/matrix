@@ -34,6 +34,6 @@ void bluez_gap_set_adv_stop();
 void bluez_gap_set_adv_restart();
 void bluez_gap_set_scan_start(uint8_t scan_type, uint16_t scan_interval, uint16_t scan_window, uint16_t timeout);
 void bluez_gap_set_scan_stop();
-void bluez_gap_get_conn_rssi(uint8_t *peer_addr, uint8_t type, uint8_t *rssi);
+void bluez_gap_get_conn_rssi(uint8_t *peer_addr, uint8_t type, int8_t *rssi);
 void bluez_gap_get_mtu(uint16_t *mtu);
 void bluez_gap_disconnect(const bdaddr_t *bdaddr, uint8_t bdaddr_type);

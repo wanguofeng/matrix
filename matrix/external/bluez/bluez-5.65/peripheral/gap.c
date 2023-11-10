@@ -20,7 +20,7 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 #include <errno.h>
-
+#include <time.h>
 
 #include "lib/bluetooth.h"
 #include "lib/hci.h"
@@ -1248,14 +1248,14 @@ static void hci_if_set_scan_rsp(uint8_t * scan_rsp, uint8_t scan_rsp_len)
 	{
 		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
 		hci_close_dev(device_handle);
-		return(1);
+		return;
 	}
 
 	if (status) 
 	{
 		LOGE("LE set scan response returned status %d\n", status);
 		hci_close_dev(device_handle);
-		return(1);
+		return;
 	}
 
 	hci_close_dev(device_handle);
@@ -1331,14 +1331,14 @@ static void hci_if_set_advertising_data(uint8_t * adv_data, uint8_t adv_len)
 	{
 		LOGE("Can't send request %s (%d)\n", strerror(errno), errno);
 		hci_close_dev(device_handle);
-		return(1);
+		return;
 	}
 
 	if (status) 
 	{
 		LOGE("LE set advertise returned status %d\n", status);
 		hci_close_dev(device_handle);
-		return(1);
+		return;
 	}
 
 	hci_close_dev(device_handle);
@@ -1702,7 +1702,7 @@ void bluez_gatts_send_notify_indicate(
 	return;
 }
 
-void bluez_gap_get_conn_rssi(uint8_t *peer_addr, uint8_t type, uint8_t *rssi)
+void bluez_gap_get_conn_rssi(uint8_t *peer_addr, uint8_t type, int8_t *rssi)
 {
 	struct mgmt_cp_get_conn_info *cp = malloc(sizeof(*cp));
 	memset(cp, 0, sizeof(*cp));
@@ -1720,10 +1720,14 @@ void bluez_gap_get_conn_rssi(uint8_t *peer_addr, uint8_t type, uint8_t *rssi)
 		goto END;
 	}
 
-	sem_wait(&sync.sem);
+	struct timespec abs_timeout;
+	abs_timeout.tv_sec = time(NULL) + 2;
+	abs_timeout.tv_nsec = 0;
+	sem_timedwait(&sync.sem, &abs_timeout);
 
 	struct mgmt_rp_get_conn_info *rp = (struct mgmt_rp_get_conn_info *)sync.userdata;
 	*rssi = rp->rssi;
+
 END:
 	sem_destroy(&sync.sem);
 	free(sync.userdata);
