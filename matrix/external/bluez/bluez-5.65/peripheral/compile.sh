@@ -12,7 +12,7 @@ unset AR
 CC="gcc"
 AR="ar"
 
-rm -rfv *.o *.a *.so bt_test
+rm -rfv *.o *.a *.so *.map bt_test
 
 # static library
 $CC -c   ../lib/bluetooth.c -g -o bluetooth.o
@@ -46,11 +46,16 @@ $CC -c   ../peripheral/uh_ble.c -g -o peripheral-uh_ble.o -I ../peripheral/ -I .
 $CC -c   ../peripheral/utils.c -g -o peripheral-utils.o  -I ../peripheral/ -I ../
 $CC -c   ../peripheral/conn_info.c -g -o peripheral-conn_info.o -I ../peripheral/ -I ../
 
+# $CC -c   ../peripheral/main.c -g -o main.o -I ../peripheral -I ../
+
 echo "***************************** Generate static library *****************************"
 $AR crv libbt-bluez-adapter.a *.o
 
 echo "***************************** Generate bt_test ************************************"
-$CC ../peripheral/main.c -o bt_test -L. -lbt-bluez-adapter -lpthread -I ../peripheral -I ../
+$CC ../peripheral/main.c -o bt_test -L. -lbt-bluez-adapter -lpthread -I ../peripheral -I ../ -Wl,-Map=bt_test_static.map
+
+
+# gcc -o test bluetooth.o hci.o sdp.o uuid.o queue.o util.o mgmt.o crypto.o ecc.o ringbuf.o shared-hci.o hci-crypto.o att.o gatt-helpers.o gatt-client.o  gatt-server.o gatt-db.o  gap.o io-mainloop.o timeout-mainloop.o mainloop.o mainloop-notify.o peripheral-gap.o peripheral-gatt.o peripheral-uh_ble.o peripheral-utils.o peripheral-conn_info.o -L. -lpthread -I ../peripheral -I ../
 
 # shared library
 
@@ -86,6 +91,8 @@ $CC -c -fPIC ../peripheral/gatt.c -g -o peripheral-gatt.o -I ../peripheral/ -I .
 $CC -c -fPIC ../peripheral/uh_ble.c -g -o peripheral-uh_ble.o -I ../peripheral/ -I ../
 $CC -c -fPIC ../peripheral/utils.c -g -o peripheral-utils.o  -I ../peripheral/ -I ../
 $CC -c -fPIC ../peripheral/conn_info.c -g -o peripheral-conn_info.o -I ../peripheral/ -I ../
+
+# $CC -c -fPIC ../peripheral/main.c -g -o main.o -I ../peripheral -I ../
 
 echo "****************************** Generate share library ******************************"
 $CC -shared -fPIC -o libbt-bluez-adapter.so *.o
