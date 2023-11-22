@@ -52,7 +52,7 @@ echo "***************************** Generate static library ********************
 $AR crv libbt-bluez-adapter.a *.o
 
 echo "***************************** Generate bt_test ************************************"
-$CC ../peripheral/main.c -o bt_test -L. -lbt-bluez-adapter -lpthread -I ../peripheral -I ../ -Wl,-Map=bt_test_static.map
+$CC ../peripheral/main.c -o bt_test -L. -lbt-bluez-adapter -lpthread -I ../peripheral -I ../ -Wl,-Map=output.map
 
 
 # gcc -o test bluetooth.o hci.o sdp.o uuid.o queue.o util.o mgmt.o crypto.o ecc.o ringbuf.o shared-hci.o hci-crypto.o att.o gatt-helpers.o gatt-client.o  gatt-server.o gatt-db.o  gap.o io-mainloop.o timeout-mainloop.o mainloop.o mainloop-notify.o peripheral-gap.o peripheral-gatt.o peripheral-uh_ble.o peripheral-utils.o peripheral-conn_info.o -L. -lpthread -I ../peripheral -I ../
