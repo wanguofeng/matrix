@@ -6,11 +6,14 @@ export STAGING_DIR=$STAGING_DIR:/home/guofeng/Workspace/myself/matrix/matrix/too
 
 CC="arm-openwrt-linux-gcc"
 AR="arm-openwrt-linux-ar"
+STRIP="arm-openwrt-linux-strip"
 
-unset CC
-unset AR
-CC="gcc"
-AR="ar"
+# unset CC
+# unset AR
+# unset STRIP
+# CC="gcc"
+# AR="ar"
+# STRIP="strip"
 
 rm -rfv *.o *.a *.so *.map bt_test
 
@@ -45,6 +48,8 @@ $CC -c   ../peripheral/gatt.c -g -o peripheral-gatt.o -I ../peripheral/ -I ../
 $CC -c   ../peripheral/uh_ble.c -g -o peripheral-uh_ble.o -I ../peripheral/ -I ../
 $CC -c   ../peripheral/utils.c -g -o peripheral-utils.o  -I ../peripheral/ -I ../
 $CC -c   ../peripheral/conn_info.c -g -o peripheral-conn_info.o -I ../peripheral/ -I ../
+
+$CC -c   ../peripheral/pthread_api.c -g -o pthread_api.o -I ../peripheral/ -I ../
 
 # $CC -c   ../peripheral/main.c -g -o main.o -I ../peripheral -I ../
 
@@ -97,3 +102,5 @@ $CC -c -fPIC ../peripheral/conn_info.c -g -o peripheral-conn_info.o -I ../periph
 echo "****************************** Generate share library ******************************"
 $CC -shared -fPIC -o libbt-bluez-adapter.so *.o
 
+$STRIP libbt-bluez-adapter.a
+$STRIP libbt-bluez-adapter.so
