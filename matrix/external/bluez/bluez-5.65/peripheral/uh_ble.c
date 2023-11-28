@@ -46,7 +46,17 @@
 #define CONFIG_LOG_TAG "Bluez_Adapter"
 #include "peripheral/log.h"
 
-#define Bluez_Adapter_Version     "v1.0.60-rc-20231110"
+#define Bluez_Adapter_Version     "v1.0.61-rc-20231128"
+
+#define UHOS_BLE_GAP_MAX_USERS              4
+uhos_ble_gap_cb_t   g_uhos_ble_pal_gap_cb_table[UHOS_BLE_GAP_MAX_USERS] = { NULL };
+uhos_u8             g_gap_users = 0;
+
+#define APP_MAX_SERVICE_NUM                     10
+#define UHOS_BLE_GATTS_MAX_USERS                4
+
+uhos_ble_gatts_cb_t     g_uhos_ble_pal_gatts_cb_table[UHOS_BLE_GATTS_MAX_USERS] = { NULL };
+uhos_u8                 g_gatts_users = 0;
 
 /*
  * BLE COMMON
@@ -329,6 +339,13 @@ uhos_ble_status_t uhos_ble_disable(void)
     pthread_join(bluez_daemon_tid, NULL);
     bluez_daemon_tid = (pthread_t)0;
     LOGI("bluez daemon exit successfully");
+
+    for (int i = 0; i < UHOS_BLE_GAP_MAX_USERS; i ++)
+        g_uhos_ble_pal_gap_cb_table[i] = UHOS_NULL;
+
+    for (int i = 0; i < UHOS_BLE_GATTS_MAX_USERS; i ++)
+        g_uhos_ble_pal_gatts_cb_table[i] = UHOS_NULL;
+
     return UHOS_BLE_SUCCESS;
 }
 
@@ -427,10 +444,6 @@ uhos_ble_status_t uhos_ble_tx_power_set(uhos_u16 conn_handle, uhos_s8 tx_power)
 /*
  * BLE GAP
 */
-
-#define UHOS_BLE_GAP_MAX_USERS              4
-uhos_ble_gap_cb_t   g_uhos_ble_pal_gap_cb_table[UHOS_BLE_GAP_MAX_USERS] = { NULL };
-uhos_u8             g_gap_users = 0;
 
 static uhos_ble_status_t uhos_ble_gap_callback(uhos_ble_gap_evt_t evt, uhos_ble_gap_evt_param_t *param)
 {
@@ -597,12 +610,6 @@ uhos_ble_status_t uhos_ble_gap_connect(uhos_ble_gap_scan_param_t scan_param,
 /**************************************************************************************************/
 /* BLE GATT层server相关功能接口原型                                                                 */
 /**************************************************************************************************/
-
-#define APP_MAX_SERVICE_NUM                     10
-#define UHOS_BLE_GATTS_MAX_USERS                4
-
-uhos_ble_gatts_cb_t     g_uhos_ble_pal_gatts_cb_table[UHOS_BLE_GATTS_MAX_USERS] = { NULL };
-uhos_u8                 g_gatts_users = 0;
 
 static uhos_ble_status_t uhos_ble_gatts_callback(uhos_ble_gatts_evt_t evt, uhos_ble_gatts_evt_param_t *param)
 {
