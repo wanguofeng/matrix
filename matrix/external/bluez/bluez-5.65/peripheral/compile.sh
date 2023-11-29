@@ -102,5 +102,5 @@ $CC -c -fPIC ../peripheral/conn_info.c -g -o peripheral-conn_info.o -I ../periph
 echo "****************************** Generate share library ******************************"
 $CC -shared -fPIC -o libbt-bluez-adapter.so *.o
 
-$STRIP libbt-bluez-adapter.a
+# $STRIP libbt-bluez-adapter.a
 $STRIP libbt-bluez-adapter.so
