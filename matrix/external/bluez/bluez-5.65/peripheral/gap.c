@@ -126,11 +126,15 @@ typedef struct _gatts_send_async {
 } gatts_send_async;
 
 static int8_t mgmt_send_wrapper(struct mgmt *mgmt, uint16_t opcode, uint16_t index,
-				uint16_t length, const void *param,
+				uint16_t length, void *param,
 				mgmt_request_func_t callback,
 				void *user_data, mgmt_destroy_func_t destroy)
 {
 	mgmt_send_async *mgmt_cmd = malloc(sizeof(mgmt_send_async));
+	if (!mgmt_cmd) {
+		LOGE("malloc error");
+		return -1;
+	}
 
 	mgmt_cmd->mgmt = mgmt;
 	mgmt_cmd->opcode = opcode;
@@ -160,6 +164,10 @@ static int8_t mgmt_send_tlv_wrapper(struct mgmt *mgmt, uint16_t opcode, uint16_t
 				void *user_data, mgmt_destroy_func_t destroy)
 {
 	mgmt_send_tlv_async *mgmt_send_tlv = malloc(sizeof(mgmt_send_tlv_async));
+	if (!mgmt_send_tlv) {
+		LOGE("malloc error");
+		return -1;
+	}
 
 	mgmt_send_tlv->mgmt = mgmt;
 	mgmt_send_tlv->opcode = opcode;
@@ -783,6 +791,11 @@ static void advertising_set_adv_param(uint16_t adv_max_interval, uint16_t adv_mi
 static void advertising_rm_adv(uint8_t instance)
 {
 	struct mgmt_cp_remove_advertising *cp = malloc(sizeof(*cp));
+	if (!cp) {
+		LOGE("malloc error");
+		return;
+	}
+
 	memset(cp, 0x00, sizeof(*cp));
 
 	cp->instance = instance;
@@ -804,8 +817,8 @@ ADV_NONCONN_IND:
 	cp->flags = cpu_to_le32(0);
 	cp->scan_rsp_len = 0;
 */
-static void advertising_add_adv(uint8_t adv_type, uint8_t instance, uint8_t * adv_data, uint8_t adv_len,
-									uint8_t * scan_rsp, uint8_t scan_rsp_len)
+static void advertising_add_adv(uint8_t adv_type, uint8_t instance, uint8_t *adv_data, uint8_t adv_len,
+									uint8_t *scan_rsp, uint8_t scan_rsp_len)
 {
 	struct mgmt_cp_add_advertising *cp;
 	void *buf;
@@ -897,6 +910,10 @@ static void device_found(uint16_t index, uint16_t len, const void *param,
 static void start_scan()
 {
 	struct mgmt_cp_start_discovery *cp = malloc(sizeof(*cp));
+	if (!cp) {
+		LOGE("malloc error");
+		return;
+	}
 
 	memset(cp, 0, sizeof(*cp));
 
@@ -913,6 +930,10 @@ static void start_scan()
 static void stop_scan()
 {
 	struct mgmt_cp_stop_discovery *cp = malloc(sizeof(*cp));
+	if (!cp) {
+		LOGE("malloc error");
+		return;
+	}
 
 	memset(cp, 0, sizeof(*cp));
 
@@ -958,7 +979,7 @@ static void recv_cmd(int fd, uint32_t events, void *user_data)
 
     // LOGD("eventfd_read count = %ld", count);
 
-	mgmt_send_async * mgmt_cmd = queue_pop_head(pending_cmd_list);
+	mgmt_send_async *mgmt_cmd = queue_pop_head(pending_cmd_list);
 	if (mgmt_cmd != NULL) {
 		LOGD("mgmt_send: %s(0x%04x) index(0x%04x)", opcode_str(mgmt_cmd->opcode), mgmt_cmd->opcode, mgmt_cmd->index);
 		mgmt_send(mgmt_cmd->mgmt, mgmt_cmd->opcode, mgmt_cmd->index, mgmt_cmd->length, mgmt_cmd->param, 
@@ -971,7 +992,7 @@ static void recv_cmd(int fd, uint32_t events, void *user_data)
 			return;
 	}
 
-	mgmt_send_tlv_async * mgmt_tlv = queue_pop_head(pending_cmd_tlv_list);
+	mgmt_send_tlv_async *mgmt_tlv = queue_pop_head(pending_cmd_tlv_list);
 	if (mgmt_tlv != NULL) {
 		LOGD("mgmt_send_tlv: %s(0x%04x) index(0x%04x)", opcode_str(mgmt_tlv->opcode), mgmt_tlv->opcode, mgmt_tlv->index);
 		mgmt_send_tlv(mgmt_tlv->mgmt, mgmt_tlv->opcode, mgmt_tlv->index, mgmt_tlv->tlv_list,
@@ -984,7 +1005,7 @@ static void recv_cmd(int fd, uint32_t events, void *user_data)
 			return;
 	}
 
-	gatts_send_async * msg = queue_pop_head(pending_gatts_list);
+	gatts_send_async *msg = queue_pop_head(pending_gatts_list);
 	if (msg != NULL) {
 		if (msg->offset == 0) {
 			bluez_gatts_send_notification(msg->char_value_handle, msg->p_value, msg->len);
@@ -1178,7 +1199,7 @@ typedef struct {
 #define EXTEND_HCI_ADV_SCAN_IND					0x0012
 #define EXTEND_HCI_ADV_IND						0x0013
 
-static void hci_if_set_scan_rsp(uint8_t * scan_rsp, uint8_t scan_rsp_len)
+static void hci_if_set_scan_rsp(uint8_t *scan_rsp, uint8_t scan_rsp_len)
 {
 	int device_id = hci_get_route(NULL);
 	int ret = 0;
@@ -1261,7 +1282,7 @@ static void hci_if_set_scan_rsp(uint8_t * scan_rsp, uint8_t scan_rsp_len)
 	hci_close_dev(device_handle);
 }
 
-static void hci_if_set_advertising_data(uint8_t * adv_data, uint8_t adv_len)
+static void hci_if_set_advertising_data(uint8_t *adv_data, uint8_t adv_len)
 {
 	int device_handle = 0;
 	int device_id = hci_get_route(NULL);
@@ -1548,8 +1569,8 @@ static void hci_if_set_adv_disable()
 	hci_close_dev(device_handle);
 }
 
-static void hci_if_set_adv_data(uint8_t * adv_data, uint8_t adv_len,
-									uint8_t * scan_rsp, uint8_t scan_rsp_len)
+static void hci_if_set_adv_data(uint8_t *adv_data, uint8_t adv_len,
+									uint8_t *scan_rsp, uint8_t scan_rsp_len)
 {
 	// hci_if_set_scan_rsp(scan_rsp, scan_rsp_len);
 	// hci_if_set_advertising_data(adv_data, adv_len);
@@ -1563,7 +1584,7 @@ static void hci_if_set_adv_start(uint8_t adv_type, uint16_t max_interval, uint16
 	hci_if_set_advertising_data(g_adv_data, g_adv_data_len);
 }
 
-void bluez_gap_set_adv_data(uint8_t const * adv, uint8_t adv_len, uint8_t const * scan_rsp, uint8_t scan_rsp_len) 
+void bluez_gap_set_adv_data(uint8_t const *adv, uint8_t adv_len, uint8_t const *scan_rsp, uint8_t scan_rsp_len) 
 {
 	memset(g_adv_data, 0x00, ADV_MAX_LENGTH);
 	memset(g_scan_rsp, 0x00, ADV_MAX_LENGTH);
@@ -1656,6 +1677,11 @@ void bluez_gap_disconnect(const bdaddr_t *bdaddr, uint8_t bdaddr_type)
 {
 	char addr[18], *name;
 	struct mgmt_cp_disconnect *cp = malloc(sizeof(*cp));
+	if (!cp) {
+		LOGE("malloc error");
+		return;
+	}
+
 	memset(cp, 0, sizeof(*cp));
 
 	bacpy(&cp->addr.bdaddr, bdaddr);
@@ -1679,6 +1705,10 @@ void bluez_gatts_send_notify_indicate(
 	uint16_t len)
 {
 	gatts_send_async *msg = malloc(sizeof(gatts_send_async));
+	if (!msg) {
+		LOGE("malloc error");
+		return;
+	}
 
 	msg->conn_handle = conn_handle;
 	msg->srv_handle = srv_handle;
@@ -1686,6 +1716,11 @@ void bluez_gatts_send_notify_indicate(
 	msg->offset = offset;
 	msg->len = len;
 	msg->p_value = malloc(len);
+	if (!msg->p_value) {
+		LOGE("malloc error");
+		return;
+	}
+
 	memcpy(msg->p_value, p_value, len);
 
 	if (!queue_push_tail(pending_gatts_list, msg)) {
@@ -1705,6 +1740,11 @@ void bluez_gatts_send_notify_indicate(
 void bluez_gap_get_conn_rssi(uint8_t *peer_addr, uint8_t type, int8_t *rssi)
 {
 	struct mgmt_cp_get_conn_info *cp = malloc(sizeof(*cp));
+	if (!cp) {
+		LOGE("malloc error");
+		return;
+	}
+
 	memset(cp, 0, sizeof(*cp));
 	memcpy(cp->addr.bdaddr.b, peer_addr, 6);
 	cp->addr.type = type;
@@ -1712,6 +1752,11 @@ void bluez_gap_get_conn_rssi(uint8_t *peer_addr, uint8_t type, int8_t *rssi)
 	struct send_sync sync = {0x00};
 	sync.opcode = MGMT_OP_GET_CONN_INFO;
 	sync.userdata = malloc(256);
+	if (!sync.userdata) {
+		LOGE("malloc error");
+		return;
+	}
+
 	sem_init(&sync.sem, 0, 0);
 
 	if (mgmt_send_wrapper(mgmt, MGMT_OP_GET_CONN_INFO, mgmt_index, sizeof(*cp), cp,
@@ -1789,7 +1834,12 @@ void bluez_gap_quit(void)
 		return;
 
 	{
-		uint8_t * val = malloc(1);
+		uint8_t *val = malloc(1);
+		if (!val) {
+			LOGE("malloc error");
+			return;
+		}
+
 		memset(val, 0x00, 1);
 
 		LOGI("disable power settings.");
@@ -1798,7 +1848,12 @@ void bluez_gap_quit(void)
 	}
 
 	{
-		uint8_t * val = malloc(1);
+		uint8_t *val = malloc(1);
+		if (!val) {
+			LOGE("malloc error");
+			return;
+		}
+
 		memset(val, 0x01, 1);
 
 		LOGI("enable br/edr settings.");
@@ -1807,7 +1862,12 @@ void bluez_gap_quit(void)
 	}
 
 	{
-		uint8_t * val = malloc(1);
+		uint8_t *val = malloc(1);
+		if (!val) {
+			LOGE("malloc error");
+			return;
+		}
+
 		memset(val, 0x00, 1);
 
 		LOGI("disable le settings.");

@@ -232,7 +232,7 @@ static void gap_device_name_read(struct gatt_db_attribute *attrib,
 
 static void populate_gap_service(struct gatt_db *db)
 {
-	struct gatt_db_attribute *service, * device_name;
+	struct gatt_db_attribute *service, *device_name;
 	bt_uuid_t uuid;
 
 	bt_uuid16_create(&uuid, UUID_GAP);
@@ -350,6 +350,11 @@ static void gatt_descriptor_ccc_write_cb(struct gatt_db_attribute *attrib,
 		uhos_ble_gatts_evt_t evt = UHOS_BLE_GATTS_EVT_CCCD_UPDATE;
 
 		uhos_ble_gatts_evt_param_t *param = malloc(sizeof(uhos_ble_gatts_evt_param_t));
+		if (!param) {
+			LOGE("malloc error");
+			return;
+		}
+
 		param->write.value_handle = handle - 1;
 		param->write.len = len;
 		param->write.offset = offset;
@@ -428,6 +433,10 @@ static void gatt_character_read_cb(struct gatt_db_attribute *attrib,
 
 	uhos_ble_gatts_evt_t evt = UHOS_BLE_GATTS_EVT_READ;
 	uhos_ble_gatts_evt_param_t *param = malloc(sizeof(uhos_ble_gatts_evt_param_t));
+	if (!param) {
+		LOGE("malloc error");
+		return;
+	}
 
 	uint8_t *value = NULL;
 	uint16_t len = 5;
@@ -480,6 +489,11 @@ static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
 
 		uhos_ble_gatts_evt_t evt = UHOS_BLE_GATTS_EVT_WRITE;
 		uhos_ble_gatts_evt_param_t *param = malloc(sizeof(uhos_ble_gatts_evt_param_t));
+		if (!param) {
+			LOGE("malloc error");
+			return;
+		}
+
 		param->write.value_handle = handle;
 		param->write.len = len;
 		param->write.offset = offset;
@@ -518,6 +532,11 @@ bool bluez_gatts_send_notification(uint16_t char_handle, const uint8_t *value, u
 	}
 
 	uint8_t *tmp = malloc(length);
+	if (!tmp) {
+		LOGE("malloc error");
+		return false;
+	}
+
 	memset(tmp, 0x00, length);
 	memcpy(tmp, value, length);
 
@@ -541,6 +560,11 @@ bool bluez_gatts_send_indication(uint16_t char_handle, const uint8_t *value, uin
 	}
 
 	uint8_t *tmp = malloc(length);
+	if (!tmp) {
+		LOGE("malloc error");
+		return false;
+	}
+
 	memset(tmp, 0x00, length);
 	memcpy(tmp, value, length);
 

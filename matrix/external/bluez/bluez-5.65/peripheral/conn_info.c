@@ -30,16 +30,16 @@ static struct queue *gatts_conn_list = NULL;
 
 static bool match_by_addr(const void *data, const void *user_data)
 {
-	const struct conn_info * d = data;
-	const struct conn_info * u = user_data;
+	const struct conn_info *d = data;
+	const struct conn_info *u = user_data;
 	
 	return (memcmp(d->bdaddr.addr, u->bdaddr.addr, 6) == 0);
 }
 
 static bool match_by_conn_handle(const void *data, const void *user_data)
 {
-	const struct conn_info * d = data;
-	const struct conn_info * u = user_data;
+	const struct conn_info *d = data;
+	const struct conn_info *u = user_data;
 	
 	if (d->conn_handle == u->conn_handle)
 		return true;
@@ -79,7 +79,11 @@ void conn_info_deinit()
 
 void conn_info_add_gatts(uint16_t conn_handle, const struct addr_info bdaddr)
 {
-	struct conn_info * cp = malloc(sizeof(struct conn_info));
+	struct conn_info *cp = malloc(sizeof(struct conn_info));
+	if (!cp) {
+		LOGE("malloc error");
+		return;
+	}
 
 	cp->conn_handle = conn_handle;
 	cp->bdaddr.addr_type = bdaddr.addr_type;
@@ -96,7 +100,7 @@ void conn_info_del_gatts(uint16_t conn_handle, const struct addr_info bdaddr)
 	temp.bdaddr.addr_type = bdaddr.addr_type;
 	memcpy(temp.bdaddr.addr, bdaddr.addr, 6);
 
-	struct conn_info * cp = queue_find(gatts_conn_list, match_by_addr,
+	struct conn_info *cp = queue_find(gatts_conn_list, match_by_addr,
 							&temp);
 	if (cp != NULL) {
  		queue_remove(gatts_conn_list, cp);
@@ -115,7 +119,11 @@ void conn_info_del_gatts(uint16_t conn_handle, const struct addr_info bdaddr)
 
 void conn_info_add_gattc(uint16_t conn_handle, const struct addr_info bdaddr)
 {
-	struct conn_info * cp = malloc(sizeof(struct conn_info));
+	struct conn_info *cp = malloc(sizeof(struct conn_info));
+	if (!cp) {
+		LOGE("malloc error");
+		return;
+	}
 
 	cp->conn_handle = conn_handle;
 	cp->bdaddr.addr_type = bdaddr.addr_type;
@@ -133,7 +141,7 @@ void conn_info_del_gattc(uint16_t conn_handle, const struct addr_info bdaddr)
 	temp.bdaddr.addr_type = bdaddr.addr_type;
 	memcpy(temp.bdaddr.addr, bdaddr.addr, 6);
 
-	struct conn_info * cp = queue_find(gattc_conn_list, match_by_addr,
+	struct conn_info *cp = queue_find(gattc_conn_list, match_by_addr,
 							&temp);
 	if (cp != NULL) {
  		queue_remove(gattc_conn_list, cp);
@@ -156,7 +164,7 @@ uint8_t conn_info_get_role_by_addr(const struct addr_info bdaddr)
 	memcpy(temp.bdaddr.addr, bdaddr.addr, 6);
 	temp.bdaddr.addr_type = bdaddr.addr_type;
 
-	struct conn_info * cp = queue_find(gattc_conn_list, match_by_addr,
+	struct conn_info *cp = queue_find(gattc_conn_list, match_by_addr,
 							&temp);
 	if (cp != NULL) {
 		return BLE_GAP_CENTRAL;
@@ -170,7 +178,7 @@ uint8_t conn_info_get_role_by_handle(uint16_t conn_handle)
 	struct conn_info temp;
 	temp.conn_handle = conn_handle;
 
-	struct conn_info * cp = queue_find(gattc_conn_list, match_by_conn_handle,
+	struct conn_info *cp = queue_find(gattc_conn_list, match_by_conn_handle,
 							&temp);
 	if (cp != NULL) {
 		return BLE_GAP_CENTRAL;
@@ -179,12 +187,12 @@ uint8_t conn_info_get_role_by_handle(uint16_t conn_handle)
 	return BLE_GAP_PERIPHERAL;
 }
 
-uint8_t conn_info_get_addr_by_handle(uint16_t conn_handle, struct addr_info * bdaddr)
+uint8_t conn_info_get_addr_by_handle(uint16_t conn_handle, struct addr_info *bdaddr)
 {
 	struct conn_info temp;
 	temp.conn_handle = conn_handle;
 
-	struct conn_info * cp = queue_find(gatts_conn_list, match_by_conn_handle,
+	struct conn_info *cp = queue_find(gatts_conn_list, match_by_conn_handle,
 										&temp);
 	if (cp != NULL) {
 		memcpy(bdaddr->addr, cp->bdaddr.addr, 6);
@@ -209,7 +217,7 @@ uint16_t conn_info_get_handle_by_addr(const struct addr_info bdaddr)
 	memcpy(temp.bdaddr.addr, bdaddr.addr, 6);
 	temp.bdaddr.addr_type = bdaddr.addr_type;
 
-	struct conn_info * cp = queue_find(gatts_conn_list, match_by_addr,
+	struct conn_info *cp = queue_find(gatts_conn_list, match_by_addr,
 							&temp);
 	if (cp != NULL) {
 		return cp->conn_handle;
