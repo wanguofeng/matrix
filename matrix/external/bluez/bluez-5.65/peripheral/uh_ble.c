@@ -46,7 +46,7 @@
 #define CONFIG_LOG_TAG "Bluez_Adapter"
 #include "peripheral/log.h"
 
-#define Bluez_Adapter_Version     "v1.0.62-rc-20231129"
+#define Bluez_Adapter_Version     "v1.0.63-rc-20240116"
 
 #define UHOS_BLE_GAP_MAX_USERS              4
 uhos_ble_gap_cb_t   g_uhos_ble_pal_gap_cb_table[UHOS_BLE_GAP_MAX_USERS] = { NULL };
