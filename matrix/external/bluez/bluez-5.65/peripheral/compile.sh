@@ -8,19 +8,18 @@ CC="arm-openwrt-linux-gcc"
 AR="arm-openwrt-linux-ar"
 STRIP="arm-openwrt-linux-strip"
 
-# unset CC
-# unset AR
-# unset STRIP
-# CC="gcc"
-# AR="ar"
-# STRIP="strip"
+unset CC
+unset AR
+unset STRIP
+CC="gcc"
+AR="ar"
+STRIP="strip"
 
 rm -rfv *.o *.a *.so *.map bt_test
 
 # static library
 $CC -c   ../lib/bluetooth.c -g -o bluetooth.o
 $CC -c   ../lib/hci.c -g -o hci.o
-$CC -c   ../lib/sdp.c -g -o sdp.o -I ../lib
 $CC -c   ../lib/uuid.c -g -o uuid.o -I ../
 
 $CC -c   ../src/shared/queue.c -g -o queue.o -I ../
@@ -49,8 +48,6 @@ $CC -c   ../peripheral/uh_ble.c -g -o peripheral-uh_ble.o -I ../peripheral/ -I .
 $CC -c   ../peripheral/utils.c -g -o peripheral-utils.o  -I ../peripheral/ -I ../
 $CC -c   ../peripheral/conn_info.c -g -o peripheral-conn_info.o -I ../peripheral/ -I ../
 
-$CC -c   ../peripheral/pthread_api.c -g -o pthread_api.o -I ../peripheral/ -I ../
-
 # $CC -c   ../peripheral/main.c -g -o main.o -I ../peripheral -I ../
 
 echo "***************************** Generate static library *****************************"
@@ -68,7 +65,6 @@ rm -rfv *.o *.so
 
 $CC -c -fPIC ../lib/bluetooth.c -g -o bluetooth.o
 $CC -c -fPIC ../lib/hci.c -g -o hci.o
-$CC -c -fPIC ../lib/sdp.c -g -o sdp.o -I ../lib
 $CC -c -fPIC ../lib/uuid.c -g -o uuid.o -I ../
 
 $CC -c -fPIC ../src/shared/queue.c -g -o queue.o -I ../
