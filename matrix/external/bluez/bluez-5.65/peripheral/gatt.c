@@ -51,6 +51,14 @@ struct gatt_conn {
 // 	struct bt_gatt_client *client;
 };
 
+struct char_handle_buf {
+	uint16_t handle;
+	uint16_t buffer_size;
+	uint8_t *buffer;
+};
+
+static struct queue *char_handle_buf_list = NULL;
+
 static int att_fd = -1;
 static struct queue *conn_list = NULL;
 static struct gatt_db *gatt_db = NULL;
@@ -93,6 +101,14 @@ static void gatt_conn_destroy(void *data)
 	bt_att_unref(conn->att);
 	close(conn->conn_fd);
 	free(conn);
+}
+
+static void char_handle_buf_destroy(void *data)
+{
+	struct char_handle_buf *buf = data;
+
+	free(buf->buffer);
+	free(buf);
 }
 
 static void gatt_conn_disconnect(int err, void *user_data)
@@ -438,8 +454,18 @@ static void gatt_character_read_cb(struct gatt_db_attribute *attrib,
 		return;
 	}
 
-	uint8_t *value = NULL;
+	struct char_handle_buf *buf = (struct char_handle_buf *) user_data;
+	if (buf == NULL) {
+		LOGE("this handle is config without read properties");
+		return;
+	}
+
+	if (handle != buf->handle) {
+		LOGW("store handle(%04x) is different from handle(%04x)", buf->handle, handle);
+	}
+
 	uint16_t len = 5;
+	uint8_t *value = NULL;
 
 	param->read.value_handle = handle;
 	param->read.offset = offset;
@@ -456,12 +482,17 @@ static void gatt_character_read_cb(struct gatt_db_attribute *attrib,
 
 	LOG_HEXDUMP_DBG(value, len, "gatt read");
 
-	gatt_db_attribute_read_result(attrib, id, 0, value, len);
-
-	// if (value != NULL)
-	// 	free(value);
+	if (len <= buf->buffer_size) {
+		memcpy(buf->buffer, value, len);
+		gatt_db_attribute_read_result(attrib, id, 0, buf->buffer, len);
+	} else {
+		LOGW("char handle buffer size(%d) is less than callback data len(%d)", buf->buffer_size, len);
+		memcpy(buf->buffer, value, buf->buffer_size);
+		gatt_db_attribute_read_result(attrib, id, 0, buf->buffer, buf->buffer_size);
+	}
 
 	free(param);
+	free(value);
 }
 
 static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
@@ -671,6 +702,7 @@ void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 		gatt_db_read_t read_callback = NULL;
 		gatt_db_write_t write_callback = NULL;
 		bool is_cccd_exist = false;
+		bool is_support_read = false;
 
 		if (char_db->char_property & UHOS_BLE_CHAR_PROP_BROADCAST)
 			properties |= BT_GATT_CHRC_PROP_BROADCAST;
@@ -679,6 +711,7 @@ void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 			properties |= BT_GATT_CHRC_PROP_READ;
 			permission |= BT_ATT_PERM_READ;
 			read_callback = gatt_character_read_cb;
+			is_support_read = true;
 		}
 
 		if (char_db->char_property & UHOS_BLE_CHAR_PROP_WRITE_WITHOUT_RESP) {
@@ -709,15 +742,34 @@ void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 		if (char_db->char_property & UHOS_BLE_CHAR_PROP_EXTENDED_PROPERTIES)
 			properties |= BT_GATT_CHRC_PROP_EXT_PROP;
 
+		struct char_handle_buf *handle_buf = NULL;
+
+		if (is_support_read) {
+			handle_buf = malloc(sizeof(struct char_handle_buf));
+			if (!handle_buf) {
+				LOGE("malloc error");
+				return;
+			}
+			handle_buf->buffer_size = 512;
+			handle_buf->buffer = malloc(handle_buf->buffer_size);
+		}
+
 		character = gatt_db_service_add_characteristic(service, &uuid,
 					permission,
 					properties,
 					read_callback,
-					write_callback, NULL);
+					write_callback, handle_buf);
 
 		char_db->char_value_handle = gatt_db_attribute_get_handle(character);
-
 		LOGI("char_value_handle = %04x", char_db->char_value_handle);
+
+		if (is_support_read) {
+			handle_buf->handle = char_db->char_value_handle;
+			if (!queue_push_tail(char_handle_buf_list, handle_buf)) {
+				LOGE("Failed to add character handle buf\n");
+				char_handle_buf_destroy(handle_buf);
+			}
+		}
 
 		if (is_cccd_exist) {
 			bt_uuid16_create(&uuid, GATT_CLIENT_CHARAC_CFG_UUID);
@@ -796,6 +848,12 @@ void bluez_gatts_server_start(void)
 		return;
 	}
 
+	char_handle_buf_list = queue_new();
+	if (!char_handle_buf_list) {
+		LOGE("create char handle buf list failed");
+		return;
+	}
+
 #if 0
 	if (gatt_db != NULL) {
 		// populate_devinfo_service(gatt_db);
@@ -819,6 +877,8 @@ void bluez_gatts_server_stop(void)
 
 	// gatt_db_unref(gatt_cache);
 	// gatt_cache = NULL;
+
+	queue_destroy(char_handle_buf_list, char_handle_buf_destroy);
 
 	gatt_db_unref(gatt_db);
 	gatt_db = NULL;
