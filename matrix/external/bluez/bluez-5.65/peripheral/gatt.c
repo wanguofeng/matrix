@@ -437,6 +437,9 @@ static void populate_gatt_service(struct gatt_db *db)
 	gatt_db_service_set_active(service, true);
 }
 
+typedef void uhos_void;
+extern uhos_void uhos_libc_free(uhos_void *ptr);
+
 static void gatt_character_read_cb(struct gatt_db_attribute *attrib,
 					unsigned int id, uint16_t offset,
 					uint8_t opcode, struct bt_att *att,
@@ -491,8 +494,13 @@ static void gatt_character_read_cb(struct gatt_db_attribute *attrib,
 		gatt_db_attribute_read_result(attrib, id, 0, buf->buffer, buf->buffer_size);
 	}
 
+	LOGI("free evt param");
 	free(param);
-	free(value);
+
+	LOGI("free value");
+	uhos_libc_free(value);
+	LOGI("done");
+
 }
 
 static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
