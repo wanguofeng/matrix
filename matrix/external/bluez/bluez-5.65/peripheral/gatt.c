@@ -374,7 +374,7 @@ static void gatt_descriptor_ccc_write_cb(struct gatt_db_attribute *attrib,
 		param->write.value_handle = handle - 1;
 		param->write.len = len;
 		param->write.offset = offset;
-		param->write.data = value;
+		param->write.data = (uint8_t *)value;
 		param->cccd = (uint32_t)*value;
 
 		struct gatt_conn *conn = queue_peek_head(conn_list);
@@ -458,8 +458,13 @@ static void gatt_character_read_cb(struct gatt_db_attribute *attrib,
 	}
 
 	struct char_handle_buf *buf = (struct char_handle_buf *) user_data;
-	if (buf == NULL) {
+	if (!buf) {
 		LOGE("this handle is config without read properties");
+		return;
+	}
+
+	if (!buf->buffer) {
+		LOGE("this handle read buf is NULL");
 		return;
 	}
 
@@ -536,7 +541,7 @@ static void gatt_character_write_cb(struct gatt_db_attribute *attrib,
 		param->write.value_handle = handle;
 		param->write.len = len;
 		param->write.offset = offset;
-		param->write.data = value;
+		param->write.data = (uint8_t *)value;
 
 		struct gatt_conn *conn = queue_peek_head(conn_list);
 		LOG_HEXDUMP_DBG(value, len, "gatt write");
@@ -753,13 +758,22 @@ void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 		struct char_handle_buf *handle_buf = NULL;
 
 		if (is_support_read) {
+
 			handle_buf = malloc(sizeof(struct char_handle_buf));
 			if (!handle_buf) {
 				LOGE("malloc error");
 				return;
 			}
+
 			handle_buf->buffer_size = 512;
+
 			handle_buf->buffer = malloc(handle_buf->buffer_size);
+			if (!handle_buf->buffer) {
+				LOGE("malloc error");
+				free(handle_buf);
+				handle_buf = NULL;
+				return;
+			}
 		}
 
 		character = gatt_db_service_add_characteristic(service, &uuid,
@@ -776,6 +790,7 @@ void bluez_gatts_add_service(uhos_ble_gatts_srv_db_t *p_srv_db)
 			if (!queue_push_tail(char_handle_buf_list, handle_buf)) {
 				LOGE("Failed to add character handle buf\n");
 				char_handle_buf_destroy(handle_buf);
+				handle_buf = NULL;
 			}
 		}
 
